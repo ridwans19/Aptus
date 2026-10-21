@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warp — Skill-Matrix Resource Allocator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F6F3; --surface:#FFFFFF; --surface-alt:#EEF1EC;
+    --ink:#1B2430; --ink-soft:#5B6570; --ink-faint:#8A9199; --line:#DFE3DD;
+    --teal:#2F6F63; --teal-soft:#E1EEEA;
+    --brass:#C98A3E; --brass-soft:#F6E9D3;
+    --rust:#C1554B; --rust-soft:#F5E1DE;
+    --radius:14px; --radius-sm:9px;
+    --shadow:0 1px 2px rgba(27,36,48,0.04), 0 8px 24px -12px rgba(27,36,48,0.12);
+  }
+  html{ font-size:1rem; }
+  html[data-textsize="sm"]{ font-size:0.875rem; }
+  html[data-textsize="lg"]{ font-size:1.1875rem; }
+  html[data-theme="dark"]{
+    --bg:#12161B; --surface:#1A1F26; --surface-alt:#20262E;
+    --ink:#EDEFF1; --ink-soft:#A7B0B8; --ink-faint:#6E7780; --line:#2B323B;
+    --teal:#5AAF9F; --teal-soft:#1B3733;
+    --brass:#E0A75E; --brass-soft:#3C2E1A;
+    --rust:#E28277; --rust-soft:#3C221F;
+    --shadow:0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{ font-family:'Inter',sans-serif; background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; transition:background .15s ease, color .15s ease; }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .disp{font-family:'Space Grotesk',sans-serif;}
+  button, input, select, textarea{ font-family:'Inter',sans-serif; }
+  a{ color:inherit; }
+
+  /* ---------- AUTH / ONBOARDING ---------- */
+  .auth-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .auth-card{ width:100%; max-width:420px; }
+  .auth-mark-row{ display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:28px; }
+  .auth-title{ font-family:'Space Grotesk'; font-size:1.375rem; font-weight:700; text-align:center; }
+  .auth-sub{ font-size:0.8438rem; color:var(--ink-soft); text-align:center; margin-top:6px; margin-bottom:28px; }
+  .clerk-btn{
+    width:100%; padding:12px 16px; border-radius:10px; border:1px solid var(--line);
+    background:var(--surface); font-size:0.8438rem; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:10px; box-shadow:var(--shadow);
+    transition:background .15s ease; color:var(--ink);
+  }
+  .clerk-btn:hover{ background:var(--surface-alt); }
+  .clerk-badge{ width:18px; height:18px; border-radius:4px; background:var(--ink); flex-shrink:0; }
+  .auth-fineprint{ text-align:center; font-size:0.6875rem; color:var(--ink-faint); margin-top:16px; }
+
+  .field-group{ margin-bottom:16px; }
+  .field-label{ font-size:0.75rem; font-weight:600; color:var(--ink-soft); margin-bottom:6px; display:block; }
+  .field-hint{ font-size:0.6875rem; color:var(--ink-faint); margin-top:5px; }
+  input[type=text], input[type=email], input[type=number], input[type=date], textarea, select{
+    width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--line);
+    background:var(--surface); font-size:0.8125rem; color:var(--ink); outline:none;
+  }
+  input:focus, textarea:focus, select:focus{ border-color:var(--teal); box-shadow:0 0 0 3px var(--teal-soft); }
+  textarea{ resize:vertical; min-height:70px; font-family:'Inter'; }
+  .btn{ padding:10px 18px; border-radius:9px; border:none; font-size:0.8125rem; font-weight:600; cursor:pointer; transition:opacity .15s ease; }
+  .btn:hover{ opacity:.88; }
+  .btn-primary{ background:var(--ink); color:var(--bg); }
+  .btn-outline{ background:var(--surface); color:var(--ink); border:1px solid var(--line); }
+  .btn-ghost{ background:transparent; color:var(--ink-soft); }
+  .btn-danger-ghost{ background:transparent; color:var(--rust); }
+  .btn-full{ width:100%; }
+  .btn-sm{ padding:6px 12px; font-size:0.75rem; border-radius:7px; }
+  .field-row2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+  /* ---------- APP SHELL ---------- */
+  .app{display:flex; min-height:100vh;}
+  .sidebar{
+    --sb-bg:#152522; --sb-bg2:#1B2F2B; --sb-ink:#F3F6F4; --sb-ink-soft:#A9BDB6; --sb-ink-faint:#6E8981;
+    --sb-line:rgba(255,255,255,0.08); --sb-active:rgba(224,167,94,0.16); --sb-accent:#E0A75E;
+    width:238px; flex-shrink:0; background:var(--sb-bg); border-right:1px solid var(--sb-line);
+    display:flex; flex-direction:column; padding:22px 14px; position:sticky; top:0; height:100vh;
+    background-image:
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 26px),
+      linear-gradient(160deg, var(--sb-bg) 0%, var(--sb-bg2) 100%);
+    background-size: 260px 260px, 100% 100%;
+    animation: sidebar-drift 40s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce){ .sidebar{ animation:none; } }
+  @keyframes sidebar-drift{ from{ background-position: 0 0, 0 0; } to{ background-position: 0 520px, 0 0; } }
+  .brand{ display:flex; align-items:center; gap:10px; padding:4px 8px 24px 8px; }
+  .brand-clickable{ border:none; background:transparent; width:100%; text-align:left; cursor:pointer; border-radius:10px; transition:background .15s ease; }
+  .brand-clickable:hover{ background:rgba(255,255,255,0.06); }
+  .brand-clickable:hover .settings-hint{ opacity:1; }
+  .settings-hint{ opacity:0; color:var(--sb-accent); font-weight:600; transition:opacity .15s ease; }
+  .settings-back{ display:flex; align-items:center; gap:9px; border:none; background:transparent; padding:6px 8px 20px 8px; cursor:pointer; font-family:'Space Grotesk'; font-weight:700; font-size:1.0625rem; color:var(--sb-ink); width:100%; text-align:left; }
+  .settings-back:hover{ color:var(--sb-accent); }
+  .settings-back svg{ width:18px; height:18px; flex-shrink:0; }
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; padding:16px 18px; gap:16px; }
+  .toggle-row:not(:last-child){ border-bottom:1px solid var(--line); }
+  .toggle-row-main{ display:flex; align-items:center; gap:14px; }
+  .toggle-icon{ width:38px; height:38px; border-radius:9px; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Space Grotesk'; font-weight:700; font-size:0.9375rem; flex-shrink:0; }
+  .toggle-name{ font-weight:600; font-size:0.875rem; }
+  .toggle-desc{ font-size:0.75rem; color:var(--ink-soft); margin-top:3px; max-width:420px; line-height:1.4; }
+  .switch{ width:38px; height:22px; border-radius:20px; background:var(--surface-alt); border:1px solid var(--line); position:relative; cursor:pointer; flex-shrink:0; }
+  .switch::after{ content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:var(--surface); box-shadow:0 1px 2px rgba(0,0,0,0.2); transition:transform .15s ease; }
+  .switch.on{ background:var(--teal); border-color:var(--teal); }
+  .switch.on::after{ transform:translateX(16px); background:#fff; }
+  .brand-mark{ width:30px; height:30px; border-radius:8px; background:linear-gradient(155deg, var(--sb-accent) 0%, #8a5f28 100%); position:relative; flex-shrink:0; }
+  .brand-mark::before, .brand-mark::after{ content:''; position:absolute; background:rgba(21,37,34,0.6); }
+  .brand-mark::before{ left:9px; top:5px; bottom:5px; width:2px; }
+  .brand-mark::after{ left:15px; top:5px; bottom:5px; width:2px; background:rgba(21,37,34,0.35); }
+  .brand-name{font-family:'Space Grotesk'; font-weight:700; font-size:1.0312rem; letter-spacing:-0.01em; color:var(--sb-ink);}
+  .brand-sub{font-size:0.6562rem; color:var(--sb-ink-faint); margin-top:-2px;}
+
+  .nav-label{ font-size:0.6562rem; text-transform:uppercase; letter-spacing:.08em; color:var(--sb-ink-faint); padding:0 12px; margin:14px 0 8px; }
+  .nav-label:first-of-type{ margin-top:0; }
+  .nav{ display:flex; flex-direction:column; gap:2px; }
+  .nav-item{ display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:9px; color:var(--sb-ink-soft); font-size:0.8438rem; font-weight:500; cursor:pointer; position:relative; border:none; background:transparent; width:100%; text-align:left; font-family:'Inter'; transition:background .15s ease, color .15s ease; }
+  .nav-item svg{ width:17px; height:17px; flex-shrink:0; opacity:.75; }
+  .nav-item:hover{ background:rgba(255,255,255,0.06); color:var(--sb-ink); }
+  .nav-item.active{ background:var(--sb-active); color:var(--sb-accent); font-weight:600; }
+  .nav-item.active svg{ opacity:1; }
+  .nav-item.active::before{ content:''; position:absolute; left:-14px; top:50%; transform:translateY(-50%); width:3px; height:18px; border-radius:3px; background:var(--sb-accent); }
+  .nav-item.hero:not(.active){ color:var(--sb-accent); }
+  .nav-spark{ width:6px; height:6px; border-radius:50%; background:var(--sb-accent); margin-left:auto; flex-shrink:0; }
+
+  .sidebar-foot{ margin-top:auto; padding-top:14px; border-top:1px solid var(--sb-line); display:flex; align-items:center; gap:9px; padding-left:8px; }
+  .avatar-sm{ width:30px; height:30px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Space Grotesk'; font-size:0.75rem; font-weight:600; background-size:cover; background-position:center; }
+  .foot-name{font-size:0.7812rem; font-weight:600; color:var(--sb-ink);}
+  .foot-role{font-size:0.6875rem; color:var(--sb-ink-faint);}
+
+  .main{ flex:1; min-width:0; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:22px 32px 18px; gap:16px; }
+  .page-title{ font-family:'Space Grotesk'; font-size:1.375rem; font-weight:600; letter-spacing:-0.01em; }
+  .page-sub{ font-size:0.8125rem; color:var(--ink-soft); margin-top:2px; }
+  .topbar-actions{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .week-nav{ display:flex; align-items:center; gap:10px; }
+  .week-nav button, .icon-btn{ width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:var(--surface); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--ink-soft); }
+  .week-nav button:hover, .icon-btn:hover{ background:var(--surface-alt); }
+  .icon-btn svg{ width:16px; height:16px; }
+  .week-label{ font-size:0.8125rem; font-weight:600; font-family:'IBM Plex Mono'; min-width:150px; text-align:center; }
+  .content{ padding:0 32px 48px; }
+
+  .settings-wrap{ position:relative; }
+
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); }
+  .panel-head{ padding:16px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .panel-head h3{ font-family:'Space Grotesk'; font-size:0.9375rem; margin:0; font-weight:600; }
+  .pill{ font-size:0.5938rem; padding:2px 7px; border-radius:20px; font-weight:600; background:var(--surface-alt); color:var(--ink-soft); }
+  .pill.req{ background:var(--teal-soft); color:var(--teal); }
+  .pill.warn{ background:var(--rust-soft); color:var(--rust); }
+
+  /* ---------- DASHBOARD ---------- */
+  .dash-search-wrap{ position:relative; max-width:320px; margin-bottom:22px; }
+  .dash-search-results{ position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); overflow:hidden; z-index:20; display:none; }
+  .dash-search-results.open{ display:block; }
+  .dash-search-item{ display:flex; align-items:center; gap:10px; padding:9px 12px; cursor:pointer; font-size:0.7812rem; }
+  .dash-search-item:hover{ background:var(--surface-alt); }
+  .dash-search-empty{ padding:12px; font-size:0.75rem; color:var(--ink-faint); }
+
+  .dash-hero{ display:flex; align-items:stretch; gap:0; padding:6px 0 30px; flex-wrap:wrap; }
+  .dash-stat{ padding:0 28px; }
+  .dash-stat:first-child{ padding-left:0; }
+  .dash-stat:not(:last-child){ border-right:1px solid var(--line); }
+  .dash-num{ font-family:'Space Grotesk'; font-size:2.125rem; font-weight:700; letter-spacing:-0.01em; line-height:1; }
+  .dash-label{ font-size:0.75rem; color:var(--ink-soft); margin-top:6px; }
+  .dash-flag{ font-size:0.6875rem; margin-top:8px; display:flex; align-items:center; gap:5px; font-weight:600; }
+  .dash-flag .dot{ width:6px; height:6px; border-radius:50%; }
+
+  .dash-section{ padding:26px 0 8px; border-top:1px solid var(--line); }
+  .dash-section-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:16px; }
+  .dash-section-head h3{ font-family:'Space Grotesk'; font-size:0.9688rem; font-weight:600; margin:0; }
+
+  .workload-row{ display:flex; align-items:center; gap:14px; padding:11px 8px; margin:0 -8px; border-radius:10px; cursor:pointer; transition:background .12s ease; }
+  .workload-row:hover{ background:var(--surface-alt); }
+  .thread-track{ flex:1; height:6px; background:var(--surface-alt); border-radius:6px; position:relative; }
+  .thread-fill{ height:100%; border-radius:6px; }
+
+  .coverage-row{ display:flex; align-items:center; gap:16px; padding:12px 0; flex-wrap:wrap; }
+  .coverage-item{ display:flex; align-items:center; gap:8px; }
+  .coverage-item .dot{ width:7px; height:7px; border-radius:50%; }
+  .coverage-item span{ font-size:0.7812rem; }
+
+  /* ---------- CALENDAR (grid-based, supports multi-day blocks) ---------- */
+  .allocate-layout{ display:grid; grid-template-columns:1fr 270px; gap:18px; align-items:start; }
+  .cal-wrap{ overflow-x:auto; }
+  .cal-grid{ min-width:640px; }
+  .cal-header-row{ display:grid; grid-template-columns:190px repeat(5,1fr); }
+  .cal-body-row{ display:grid; grid-template-columns:190px 1fr; }
+  .cal-header-row{ border-bottom:1px solid var(--line); }
+  .cal-header-emp, .cal-header-day{ font-size:0.7188rem; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; padding:12px 10px; }
+  .cal-header-day{ border-left:1px solid var(--line); }
+  .cal-body-row{ border-bottom:1px solid var(--line); }
+  .cal-body-row:last-child{ border-bottom:none; }
+  .emp-cell{ padding:10px; display:flex; align-items:center; }
+  .emp-id{ display:flex; align-items:center; gap:10px; }
+  .avatar{ width:32px; height:32px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Space Grotesk'; font-size:0.7812rem; font-weight:600; background-size:cover; background-position:center; }
+  .emp-name{ font-size:0.8125rem; font-weight:600; }
+  .cap-bar-track{ height:5px; background:var(--surface-alt); border-radius:4px; margin-top:5px; width:110px; overflow:hidden; }
+  .cap-bar-fill{ height:100%; border-radius:4px; }
+  .cap-txt{ font-size:0.6562rem; color:var(--ink-faint); margin-top:3px; }
+
+  .cal-daysarea{ position:relative; display:grid; grid-template-columns:repeat(5,1fr); }
+  .cal-daycol{ border-left:1px solid var(--line); min-height:70px; padding:4px; transition:background .12s ease, box-shadow .12s ease; }
+  .cal-daycol.unavailable{ background:repeating-linear-gradient(135deg, var(--surface-alt), var(--surface-alt) 6px, #e4e7e1 6px, #e4e7e1 7px); }
+  .cal-daycol.dragover{ background:var(--teal-soft); box-shadow:inset 0 0 0 1.5px var(--teal); }
+  .cal-daycol.denied{ background:var(--rust-soft) !important; box-shadow:inset 0 0 0 1.5px var(--rust) !important; }
+  .day-off-label{ display:flex; flex-direction:column; align-items:center; gap:4px; font-size:0.625rem; color:var(--ink-soft); text-align:center; padding:16px 6px 0; line-height:1.3; }
+  .day-off-label svg{ width:13px; height:13px; opacity:.6; flex-shrink:0; }
+  .day-off-label span{ display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+
+  .task-block{ position:absolute; border-radius:10px; padding:7px 9px 8px; cursor:grab; border:1px solid transparent; }
+  .task-block:active{ cursor:grabbing; }
+  .task-block.match-high{ background:var(--teal-soft); border-color:#c3ddd6; }
+  .task-block.match-mid{ background:var(--brass-soft); border-color:#ecd3a4; }
+  .task-block.match-low{ background:var(--rust-soft); border-color:#eec4bf; }
+  .chip-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
+  .chip-name{ font-size:0.7188rem; font-weight:600; line-height:1.25; }
+  .chip-hrs{ font-size:0.625rem; color:var(--ink-soft); margin-top:3px; }
+  .dial{ flex-shrink:0; }
+  .resize-handle{ position:absolute; right:-3px; top:0; bottom:0; width:12px; cursor:ew-resize; }
+  .resize-handle::after{ content:''; position:absolute; right:4px; top:50%; transform:translateY(-50%); width:3px; height:16px; border-radius:3px; background:rgba(0,0,0,0.18); }
+  .block-remove{ position:absolute; top:-7px; right:-7px; width:18px; height:18px; border-radius:50%; background:var(--surface); border:1px solid var(--line); color:var(--ink-faint); font-size:0.75rem; display:none; align-items:center; justify-content:center; cursor:pointer; padding:0; }
+  .task-block:hover .block-remove{ display:flex; }
+  .block-remove:hover{ color:var(--rust); }
+
+  .tray-item{ border:1px dashed var(--line); border-radius:10px; padding:10px 11px; margin:10px 12px; cursor:grab; background:var(--surface); }
+  .tray-item:active{ cursor:grabbing; }
+  .tray-item-name{ font-size:0.7812rem; font-weight:600; }
+  .tray-item-meta{ font-size:0.6562rem; color:var(--ink-soft); margin-top:4px; display:flex; gap:8px; flex-wrap:wrap; }
+  .tray-empty{ padding:26px 18px; text-align:center; font-size:0.75rem; color:var(--ink-faint); }
+
+  /* ---------- SKILL MATRIX ---------- */
+  table.matrix{ width:100%; border-collapse:collapse; }
+  table.matrix th, table.matrix td{ padding:11px 14px; border-bottom:1px solid var(--line); text-align:left; }
+  table.matrix th{ font-size:0.6875rem; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); font-weight:600; }
+  .dotrow{ display:flex; gap:3px; align-items:center; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--surface-alt); }
+  .dot.filled{ background:var(--teal); }
+
+  /* ---------- LIST ROWS ---------- */
+  .list-row{ display:flex; align-items:center; gap:14px; padding:14px 18px; }
+  .list-row:not(:last-child){ border-bottom:1px solid var(--line); }
+  .skill-tag-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; }
+  .skill-tag{ font-size:0.6562rem; background:var(--surface-alt); padding:3px 8px; border-radius:6px; display:flex; align-items:center; gap:5px; }
+  .skill-tag button{ border:none; background:transparent; cursor:pointer; color:var(--ink-faint); font-size:0.6875rem; padding:0; }
+  .skill-tag button:hover{ color:var(--rust); }
+
+  .inline-form{ padding:16px 18px; background:var(--surface-alt); border-bottom:1px solid var(--line); display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .inline-form .field-group{ margin-bottom:0; flex:1; min-width:140px; }
+
+  /* ---------- SKILLS PAGE ---------- */
+  .skill-chip-cloud{ display:flex; flex-wrap:wrap; gap:8px; padding:18px; }
+  .skill-chip{ display:flex; align-items:center; gap:8px; background:var(--surface-alt); padding:6px 6px 6px 12px; border-radius:20px; font-size:0.7812rem; font-weight:600; }
+  .skill-chip button{ border:none; background:var(--surface); width:18px; height:18px; border-radius:50%; cursor:pointer; color:var(--ink-faint); font-size:0.6875rem; }
+  .skill-chip button:hover{ color:var(--rust); }
+  .add-skill-row{ display:flex; gap:8px; padding:0 18px 18px; }
+  .add-skill-row input{ flex:1; }
+
+  /* ---------- SMART ALLOCATE ---------- */
+  .seg-switch{ display:inline-flex; background:var(--surface-alt); border-radius:10px; padding:3px; gap:2px; }
+  .seg-switch button{ border:none; background:transparent; padding:7px 14px; font-size:0.7812rem; font-weight:600; color:var(--ink-soft); border-radius:8px; cursor:pointer; }
+  .seg-switch button.active{ background:var(--ink); color:var(--bg); }
+  .req-row{ display:grid; grid-template-columns:1fr 110px 90px 30px; gap:8px; align-items:center; margin-bottom:8px; }
+  .req-row select{ padding:9px 10px; }
+  .check-row{ display:flex; align-items:center; gap:6px; font-size:0.7188rem; color:var(--ink-soft); }
+  .rm-btn{ border:none; background:transparent; color:var(--ink-faint); cursor:pointer; font-size:0.9375rem; }
+  .rm-btn:hover{ color:var(--rust); }
+
+  .rank-item{ display:flex; gap:16px; padding:18px; align-items:flex-start; }
+  .rank-item:not(:last-child){ border-bottom:1px solid var(--line); }
+  .rank-num{ font-family:'IBM Plex Mono'; font-size:1.25rem; font-weight:500; color:var(--ink-faint); width:34px; flex-shrink:0; padding-top:2px; }
+  .rank-body{ flex:1; }
+  .rank-name-row{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .rank-explain{ font-size:0.7812rem; color:var(--ink-soft); line-height:1.55; }
+  .rank-item.ineligible{ opacity:.62; }
+  .rank-item.ineligible .rank-explain{ color:var(--rust); }
+
+  /* ---------- MY WEEK / SKILLS / TASKS ---------- */
+  .skill-thread-list{ display:flex; flex-direction:column; gap:14px; padding:18px; }
+  .skill-thread{ display:flex; align-items:center; gap:14px; }
+  .skill-thread-name{ width:130px; font-size:0.8125rem; font-weight:600; flex-shrink:0; }
+  .skill-thread-lvl{ font-family:'IBM Plex Mono'; font-size:0.7188rem; color:var(--ink-soft); width:34px; text-align:right; flex-shrink:0; }
+  .task-list-item{ display:flex; align-items:center; justify-content:space-between; padding:13px 18px; border-bottom:1px solid var(--line); }
+  .task-list-item:last-child{ border-bottom:none; }
+  .tli-name{ font-size:0.8125rem; font-weight:600; }
+  .tli-meta{ font-size:0.7188rem; color:var(--ink-soft); margin-top:2px; }
+
+  /* ---------- AVAILABILITY ---------- */
+  .avail-controls{ display:flex; gap:10px; padding:18px; border-bottom:1px solid var(--line); align-items:center; flex-wrap:wrap; }
+  .avail-controls select{ width:auto; }
+  .month-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; padding:18px; }
+  .month-grid .dow{ font-size:0.6562rem; text-align:center; color:var(--ink-faint); font-weight:600; padding-bottom:4px; }
+  .day-btn{ aspect-ratio:1; border-radius:9px; border:1px solid var(--line); background:var(--surface); cursor:pointer; font-family:'IBM Plex Mono'; font-size:0.75rem; display:flex; align-items:center; justify-content:center; position:relative; color:var(--ink); }
+  .day-btn:hover{ background:var(--surface-alt); }
+  .day-btn.off{ background:var(--rust-soft); border-color:#eec4bf; color:var(--rust); font-weight:600; }
+  .day-btn.selected{ box-shadow:0 0 0 2px var(--ink); }
+  .day-btn.blank{ visibility:hidden; }
+  .avail-editor{ padding:18px; border-top:1px solid var(--line); background:var(--surface-alt); }
+  .avail-editor-date{ font-weight:600; font-size:0.8438rem; margin-bottom:10px; }
+  .unavail-list-item{ display:flex; align-items:flex-start; justify-content:space-between; padding:12px 18px; gap:12px; }
+  .unavail-list-item:not(:last-child){ border-bottom:1px solid var(--line); }
+  .unavail-date{ font-family:'IBM Plex Mono'; font-size:0.75rem; font-weight:600; color:var(--rust); }
+  .unavail-note{ font-size:0.75rem; color:var(--ink-soft); margin-top:3px; }
+
+  .empty-note{ padding:22px 18px; font-size:0.7812rem; color:var(--ink-faint); }
+  .invite-status{ font-size:0.6875rem; padding:2px 8px; border-radius:20px; background:var(--brass-soft); color:var(--brass); font-weight:600; }
+
+  /* ---------- MODAL ---------- */
+  .modal-backdrop{ position:fixed; inset:0; background:rgba(10,14,18,0.5); display:flex; align-items:flex-start; justify-content:center; padding:60px 20px; z-index:100; animation:fadeIn .15s ease; }
+  .modal-card{ background:var(--surface); border-radius:16px; max-width:560px; width:100%; box-shadow:0 20px 60px -20px rgba(0,0,0,0.4); max-height:80vh; overflow-y:auto; animation:slideUp .18s ease; }
+  @keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
+  @keyframes slideUp{ from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:translateY(0);} }
+  .modal-head{ padding:20px 22px; border-bottom:1px solid var(--line); }
+  .modal-back{ display:flex; align-items:center; gap:6px; border:none; background:transparent; color:var(--ink-soft); font-size:0.7812rem; font-weight:600; cursor:pointer; padding:0; margin-bottom:14px; }
+  .modal-back:hover{ color:var(--ink); }
+  .modal-person-row{ display:flex; align-items:center; gap:14px; }
+  .modal-body{ padding:20px 22px; }
+  .modal-task-card{ padding:14px 0; }
+  .modal-task-card:not(:last-child){ border-bottom:1px solid var(--line); }
+  .modal-task-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .modal-task-name{ font-weight:600; font-size:0.875rem; }
+  .modal-task-client{ font-size:0.6875rem; color:var(--teal); margin-top:2px; font-weight:600; }
+  .modal-task-meta{ font-size:0.75rem; color:var(--ink-soft); margin-top:8px; line-height:1.5; }
+  .modal-task-fit{ font-size:0.75rem; color:var(--ink-soft); margin-top:4px; line-height:1.5; }
+
+  /* ---------- DEMO SWITCHER (not part of product) ---------- */
+  .demo-switcher{ position:fixed; left:16px; bottom:16px; z-index:50; background:var(--surface); border:1px dashed var(--ink-faint); border-radius:11px; padding:9px 12px; box-shadow:var(--shadow); display:flex; align-items:center; gap:9px; }
+  .demo-label{ font-family:'IBM Plex Mono'; font-size:0.5938rem; letter-spacing:.06em; color:var(--ink-faint); text-transform:uppercase; }
+  .demo-switcher select{ font-size:0.75rem; padding:5px 8px; border-radius:7px; width:auto; }
+
+  ::-webkit-scrollbar{ height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb{ background:var(--line); border-radius:8px; }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+<div id="modal-root"></div>
+
+<script>
+/* =========================================================
+   DATE HELPERS
+========================================================= */
+const MS_DAY = 86400000;
+const BASE_MONDAY = new Date(2026,7,31); // Mon Aug 31 2026 — reference "this week"
+function weekDates(offset){
+  const start = new Date(BASE_MONDAY.getTime() + offset*7*MS_DAY);
+  return [0,1,2,3,4].map(i=> new Date(start.getTime()+i*MS_DAY));
+}
+function iso(d){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+function dayShort(d){ return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]; }
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+/* =========================================================
+   DATA
+========================================================= */
+let skillsList = ['Next.js','PostgreSQL','UI Design','Testing','DevOps'];
+const PALETTE = ['#2F6F63','#C98A3E','#5B6570','#C1554B','#3E7C9B','#7C6A9B'];
+let colorSeq = 0;
+function nextColor(){ return PALETTE[(colorSeq++) % PALETTE.length]; }
+
+let employees = [
+  { id:'e1', name:'Sarah Chen',  email:'sarah@brightframe.io', title:'Frontend Engineer', init:'SC', color:'#2F6F63', capacity:40, photo:null, skills:{'Next.js':5,'PostgreSQL':4,'Testing':3}, unavailableDates:{} },
+  { id:'e2', name:'Adam Osei',   email:'adam@brightframe.io',  title:'Backend Engineer',  init:'AO', color:'#C98A3E', capacity:40, photo:null, skills:{'Next.js':4,'PostgreSQL':2,'DevOps':4}, unavailableDates:{} },
+  { id:'e3', name:'John Park',   email:'john@brightframe.io',  title:'QA Engineer',       init:'JP', color:'#5B6570', capacity:40, photo:null, skills:{'Next.js':3,'UI Design':4,'Testing':4}, unavailableDates:{} },
+  { id:'e4', name:'Mia Torres',  email:'mia@brightframe.io',   title:'Product Designer',  init:'MT', color:'#C1554B', capacity:40, photo:null, skills:{'UI Design':5,'Next.js':3,'DevOps':2}, unavailableDates:{} },
+];
+const w0 = weekDates(0);
+employees[3].unavailableDates[iso(w0[2])] = { note:'Team offsite — out of office' };
+
+const CURRENT_EMPLOYEE_ID = 'e1';
+
+let projects = [ { id:'p1', name:'Client Portal Revamp' }, { id:'p2', name:'Internal Analytics Tool' } ];
+let invites = [];
+
+let taskSeq = 5;
+let assignments = [
+  { id:'a1', name:'Build login flow', hours:12, reqSkill:'Next.js', reqLevel:4, empId:'e1', day: iso(w0[0]), duration:1, client:'Client Portal Revamp', deadline:iso(new Date(w0[4].getTime()+7*MS_DAY)) },
+  { id:'a2', name:'API rate limiting', hours:8,  reqSkill:'DevOps',  reqLevel:3, empId:'e2', day: iso(w0[1]), duration:2, client:'Internal Analytics Tool', deadline:null },
+];
+let unassignedTasks = [
+  { id:'t3', name:'Auth database schema', hours:14, reqSkill:'PostgreSQL', reqLevel:3 },
+  { id:'t4', name:'Dashboard UI polish',  hours:10, reqSkill:'UI Design',  reqLevel:4 },
+];
+
+/* =========================================================
+   APP STATE
+========================================================= */
+let state = {
+  stage: 'signin', role: 'manager', page: 'schedule', weekOffset: 0,
+  theme: 'light', textSize: 'md',
+  company: { name:'', industry:'Software & IT', size:'2-10', managerPhoto:null },
+  smart: {
+    projectMode:'new', projectName:'', existingProjectId: projects[0].id,
+    clientName:'', clientInfo:'',
+    requirements:[ { skill: skillsList[0], level:4, mandatory:true } ],
+    hours:20, deadline:'', results:null
+  },
+  avail: { month:7, year:2026, selectedDate:null },
+  personModal: null, // { empId, range:'week'|'month', monthOffset }
+  beforeSettingsPage: null,
+  settings: {
+    notif: { taskAssigned:true, overload:true, weeklyDigest:false },
+    security: { twoFactor:false, sessionTimeout:true },
+    integrations: { asana:false, jira:false, trello:false, teamwork:false },
+  },
+};
+
+/* =========================================================
+   ICONS
+========================================================= */
+const ICONS = {
+  grid:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`,
+  calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>`,
+  users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.2c2.4.3 4.5 2.3 4.5 5.8"/></svg>`,
+  matrix: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6" cy="6" r="1.4"/><circle cx="12" cy="6" r="1.4"/><circle cx="18" cy="6" r="1.4"/><circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4" opacity=".35"/><circle cx="6" cy="18" r="1.4"/><circle cx="12" cy="18" r="1.4" opacity=".35"/><circle cx="18" cy="18" r="1.4" opacity=".35"/></svg>`,
+  list: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1.3" fill="currentColor" stroke="none"/></svg>`,
+  clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>`,
+  sparkle: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l1.8 5.6L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.4L12 2z"/><path d="M19 13l.7 2.1L22 16l-2.3.9L19 19l-.7-2.1L16 16l2.3-.9L19 13z" opacity=".55"/></svg>`,
+  building: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/></svg>`,
+  user: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-4 3.1-6.8 7-6.8s7 2.8 7 6.8"/></svg>`,
+  sliders: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h13M20 18h0"/><circle cx="15" cy="6" r="2" fill="var(--surface)"/><circle cx="7" cy="12" r="2" fill="var(--surface)"/><circle cx="17" cy="18" r="2" fill="var(--surface)"/></svg>`,
+  arrowleft: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>`,
+  bell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>`,
+  shield: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/></svg>`,
+  plug: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3v5M15 3v5M6 8h12l-1 5a5 5 0 0 1-10 0L6 8Z"/><path d="M12 16v5"/></svg>`,
+};
+
+const SETTINGS_NAV = [
+  { id:'set-general', label:'General', icon:'building' },
+  { id:'set-accessibility', label:'Accessibility', icon:'sliders' },
+  { id:'set-integrations', label:'Integrations', icon:'plug' },
+  { id:'set-notifications', label:'Notifications', icon:'bell' },
+  { id:'set-security', label:'Security', icon:'shield' },
+];
+
+const NAV = {
+  manager: [
+    { id:'dashboard', label:'Dashboard', icon:'grid' },
+    { id:'smart', label:'Smart Allocate', icon:'sparkle', hero:true },
+    { id:'schedule', label:'Schedule', icon:'calendar' },
+    { id:'team', label:'Team', icon:'users' },
+    { id:'skills', label:'Skills', icon:'matrix' },
+  ],
+  employee: [
+    { id:'myweek', label:'My week', icon:'calendar' },
+    { id:'mytasks', label:'My tasks', icon:'list' },
+    { id:'profile', label:'My profile', icon:'user' },
+    { id:'availability', label:'Availability', icon:'clock' },
+  ]
+};
+const PAGE_META = {
+  dashboard: ['Dashboard','A snapshot of workload and skill coverage across the team'],
+  smart: ['Smart Allocate','Describe the work — get a ranked, explained shortlist'],
+  schedule: ['Schedule','Drag a task onto a day, then drag its edge to extend it across days'],
+  team: ['Team','Everyone on the team, plus pending invitations'],
+  skills: ['Skills','The skill catalog and proficiency levels across the team'],
+  'set-general': ['General','Details set up when your workspace was created'],
+  'set-accessibility': ['Accessibility','Display and reading preferences for this workspace'],
+  'set-integrations': ['Integrations','Import projects or people from your favorite apps'],
+  'set-notifications': ['Notifications','Choose what Warp emails you about'],
+  'set-security': ['Security','Manage how your workspace is protected'],
+  myweek: ['My week','Your assignments and availability, Monday to Friday'],
+  mytasks: ['My tasks','Everything currently on your plate'],
+  profile: ['My profile','Your personal information and skills'],
+  availability: ['Availability','Mark specific dates you won\u2019t be able to work'],
+};
+
+/* =========================================================
+   SCORING HELPERS
+========================================================= */
+function empById(id){ return employees.find(e=>e.id===id); }
+function assignedHoursInWeek(empId, offset){
+  const dates = weekDates(offset).map(iso);
+  return assignments.filter(a=>a.empId===empId && dates.includes(a.day)).reduce((s,a)=>s+a.hours,0);
+}
+function matchScore(emp, task, offset){
+  const lvl = emp.skills[task.reqSkill];
+  let score;
+  if(lvl === undefined){ score = 28; }
+  else if(lvl >= task.reqLevel){ score = Math.min(97, 80 + (lvl-task.reqLevel)*6); }
+  else { score = 42 + lvl*6; }
+  const remaining = emp.capacity - assignedHoursInWeek(emp.id, offset);
+  if(remaining < task.hours) score = Math.round(score*0.82);
+  return Math.max(12, Math.round(score));
+}
+function matchClass(score){ return score>=80?'match-high':score>=55?'match-mid':'match-low'; }
+function matchColor(score){ return score>=80?'var(--teal)':score>=55?'var(--brass)':'var(--rust)'; }
+function avatarHTML(person, size, fontSizeRem, cls){
+  cls = cls || 'avatar';
+  const dim = size ? `width:${size}px; height:${size}px;` : '';
+  const fs = fontSizeRem ? `font-size:${fontSizeRem};` : '';
+  if(person && person.photo){
+    return `<div class="${cls}" style="${dim} background-image:url('${person.photo}');"></div>`;
+  }
+  return `<div class="${cls}" style="${dim} ${fs} background:${(person&&person.color)||'var(--teal)'};">${(person&&person.init)||'?'}</div>`;
+}
+function miniDial(score, size=30){
+  const r=(size/2)-3, c=2*Math.PI*r, off=c-(score/100)*c, color=matchColor(score);
+  return `<svg class="dial" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--surface-alt)" stroke-width="3"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="3"
+      stroke-dasharray="${c}" stroke-dashoffset="${off}" stroke-linecap="round" transform="rotate(-90 ${size/2} ${size/2})"/>
+    <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle" font-family="IBM Plex Mono" font-size="${size*0.3}" fill="${color}" font-weight="600">${score}</text>
+  </svg>`;
+}
+
+/* =========================================================
+   ROOT RENDER SWITCH
+========================================================= */
+function render(){
+  const root = document.getElementById('root');
+  if(state.stage==='signin') root.innerHTML = renderSignIn();
+  else if(state.stage==='onboarding') root.innerHTML = renderOnboarding();
+  else root.innerHTML = renderApp();
+  if(state.stage==='app'){ renderSidebar(); renderPage(); }
+}
+
+function renderSignIn(){
+  return `<div class="auth-screen"><div class="auth-card">
+    <div class="auth-mark-row"><div class="brand-mark"></div><span class="brand-name">Warp</span></div>
+    <div class="auth-title">Sign in to Warp</div>
+    <div class="auth-sub">Skill-matrix resource allocation for software teams</div>
+    <button class="clerk-btn" onclick="goOnboarding()"><span class="clerk-badge"></span> Continue with Clerk</button>
+    <div class="auth-fineprint">This simulates a Clerk-authenticated sign-in for the prototype.</div>
+  </div></div>`;
+}
+function goOnboarding(){ state.stage='onboarding'; render(); }
+
+function renderOnboarding(){
+  return `<div class="auth-screen"><div class="auth-card" style="max-width:460px;">
+    <div class="auth-mark-row"><div class="brand-mark"></div><span class="brand-name">Warp</span></div>
+    <div class="auth-title">Set up your workspace</div>
+    <div class="auth-sub">Tell us about your company — you can change this later</div>
+    <div class="field-group"><label class="field-label">Company name</label><input type="text" id="ob-name" placeholder="e.g. Brightframe Studio" value="${state.company.name}"></div>
+    <div class="field-row2">
+      <div class="field-group"><label class="field-label">Industry</label><select id="ob-industry">${['Software & IT','Design & Creative','Consulting','Construction','Marketing'].map(i=>`<option ${state.company.industry===i?'selected':''}>${i}</option>`).join('')}</select></div>
+      <div class="field-group"><label class="field-label">Team size</label><select id="ob-size">${['2-10','11-50','51-200','200+'].map(i=>`<option ${state.company.size===i?'selected':''}>${i}</option>`).join('')}</select></div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="finishOnboarding()">Continue to Warp</button>
+  </div></div>`;
+}
+function finishOnboarding(){
+  const name = document.getElementById('ob-name').value.trim();
+  if(!name){ document.getElementById('ob-name').style.borderColor='var(--rust)'; return; }
+  state.company.name = name;
+  state.company.industry = document.getElementById('ob-industry').value;
+  state.company.size = document.getElementById('ob-size').value;
+  state.stage = 'app'; state.role = 'manager'; state.page = 'schedule';
+  render();
+}
+
+/* ---------- APP SHELL ---------- */
+function renderApp(){
+  return `<div class="app">
+    <aside class="sidebar"><div id="sidebar-inner"></div></aside>
+    <main class="main">
+      <div class="topbar">
+        <div><div class="page-title" id="page-title"></div><div class="page-sub" id="page-sub"></div></div>
+        <div class="topbar-actions">
+          <div class="week-nav" id="week-nav-wrap"></div>
+        </div>
+      </div>
+      <div class="content" id="content"></div>
+    </main>
+  </div>
+  <div class="demo-switcher">
+    <span class="demo-label">Prototype preview</span>
+    <select onchange="setPreviewRole(this.value)">
+      <option value="manager" ${state.role==='manager'?'selected':''}>Manager account</option>
+      <option value="employee" ${state.role==='employee'?'selected':''}>Employee account</option>
+    </select>
+  </div>`;
+}
+function setPreviewRole(role){
+  state.role = role;
+  state.page = role==='manager' ? 'schedule' : 'myweek';
+  renderSidebar(); renderPage();
+}
+function footHTML(){
+  if(state.role==='manager'){
+    const initials = (state.company.name||'W').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    const managerAsPerson = { photo: state.company.managerPhoto, color:'#2F6F63', init: initials };
+    return `${avatarHTML(managerAsPerson, null, null, 'avatar-sm')}<div><div class="foot-name">${state.company.name}</div><div class="foot-role">Manager</div></div>`;
+  }
+  const e = empById(CURRENT_EMPLOYEE_ID);
+  return `${avatarHTML(e, null, null, 'avatar-sm')}<div><div class="foot-name">${e.name}</div><div class="foot-role">${e.title}</div></div>`;
+}
+function goPage(page){ state.page = page; renderSidebar(); renderPage(); }
+function openSettings(){
+  if(state.role!=='manager') return;
+  state.beforeSettingsPage = state.page;
+  goPage('set-general');
+}
+function renderSidebar(){
+  const root = document.getElementById('sidebar-inner');
+  const inSettings = state.page.startsWith('set-');
+
+  if(inSettings){
+    root.innerHTML = `
+      <button class="settings-back" onclick="goPage(state.beforeSettingsPage || 'schedule')">${ICONS.arrowleft}<span>Company settings</span></button>
+      <div class="nav-label">Settings</div>
+      <div class="nav" id="nav">
+        ${SETTINGS_NAV.map(item => `<button class="nav-item ${state.page===item.id?'active':''}" onclick="goPage('${item.id}')">${ICONS[item.icon]}<span>${item.label}</span></button>`).join('')}
+      </div>
+      <div class="sidebar-foot" id="sidebar-foot"></div>`;
+  } else {
+    const brandInner = `<div class="brand-mark"></div><div><div class="brand-name">Warp</div><div class="brand-sub">${state.company.name || 'Your workspace'}${state.role==='manager'?' <span class="settings-hint">\u2192 Settings</span>':''}</div></div>`;
+    root.innerHTML = `
+      ${state.role==='manager'
+        ? `<button class="brand brand-clickable" onclick="openSettings()" title="Company settings">${brandInner}</button>`
+        : `<div class="brand">${brandInner}</div>`}
+      <div class="nav-label">Workspace</div>
+      <div class="nav" id="nav">
+        ${NAV[state.role].map(item => `<button class="nav-item ${item.hero?'hero':''} ${state.page===item.id?'active':''}" onclick="goPage('${item.id}')">${ICONS[item.icon]}<span>${item.label}</span>${item.hero?'<span class="nav-spark"></span>':''}</button>`).join('')}
+      </div>
+      <div class="sidebar-foot" id="sidebar-foot"></div>`;
+  }
+  document.getElementById('sidebar-foot').innerHTML = footHTML();
+}
+function shiftWeek(d){ state.weekOffset += d; renderPage(); }
+
+/* ---------- Settings popover ---------- */
+function renderSetAccessibility(){
+  return `<div class="panel"><div style="padding:18px; max-width:420px;">
+    <div class="field-label">Theme</div>
+    <div class="seg-switch" style="margin-bottom:18px; width:100%;">
+      <button style="flex:1;" class="${state.theme==='light'?'active':''}" onclick="setTheme('light')">Light</button>
+      <button style="flex:1;" class="${state.theme==='dark'?'active':''}" onclick="setTheme('dark')">Dark</button>
+    </div>
+    <div class="field-label">Text size</div>
+    <div class="seg-switch" style="width:100%; margin-bottom:6px;">
+      <button style="flex:1;" class="${state.textSize==='sm'?'active':''}" onclick="setTextSize('sm')">A-</button>
+      <button style="flex:1;" class="${state.textSize==='md'?'active':''}" onclick="setTextSize('md')">A</button>
+      <button style="flex:1;" class="${state.textSize==='lg'?'active':''}" onclick="setTextSize('lg')">A+</button>
+    </div>
+    <div class="field-hint">Applies across all of Warp, immediately.</div>
+  </div></div>`;
+}
+function setTheme(t){ state.theme=t; document.documentElement.setAttribute('data-theme',t); renderPage(); }
+function setTextSize(s){ state.textSize=s; document.documentElement.setAttribute('data-textsize',s); renderPage(); }
+
+function renderPage(){
+  const [title, sub] = PAGE_META[state.page];
+  document.getElementById('page-title').textContent = title;
+  document.getElementById('page-sub').textContent = sub;
+
+  const weekWrap = document.getElementById('week-nav-wrap');
+  if(state.page==='schedule' || state.page==='myweek'){
+    const dates = weekDates(state.weekOffset);
+    weekWrap.innerHTML = `<button onclick="shiftWeek(-1)">&#8249;</button>
+      <div class="week-label">${dates[0].getDate()} ${MONTH_NAMES[dates[0].getMonth()].slice(0,3)} \u2013 ${dates[4].getDate()} ${MONTH_NAMES[dates[4].getMonth()].slice(0,3)}</div>
+      <button onclick="shiftWeek(1)">&#8250;</button>`;
+  } else { weekWrap.innerHTML = ''; }
+
+  const c = document.getElementById('content');
+  if(state.page==='dashboard') c.innerHTML = renderDashboard();
+  else if(state.page==='smart') c.innerHTML = renderSmart();
+  else if(state.page==='schedule') c.innerHTML = renderSchedule();
+  else if(state.page==='team') c.innerHTML = renderTeam();
+  else if(state.page==='skills') c.innerHTML = renderSkills();
+  else if(state.page==='set-general') c.innerHTML = renderSetGeneral();
+  else if(state.page==='set-accessibility') c.innerHTML = renderSetAccessibility();
+  else if(state.page==='set-integrations') c.innerHTML = renderSetIntegrations();
+  else if(state.page==='set-notifications') c.innerHTML = renderSetNotifications();
+  else if(state.page==='set-security') c.innerHTML = renderSetSecurity();
+  else if(state.page==='myweek') c.innerHTML = renderMyWeek();
+  else if(state.page==='mytasks') c.innerHTML = renderMyTasks();
+  else if(state.page==='profile') c.innerHTML = renderProfile();
+  else if(state.page==='availability') c.innerHTML = renderAvailability();
+
+  if(state.page==='schedule') attachDnD();
+  if(state.page==='smart') attachSmartHandlers();
+}
+
+/* =========================================================
+   DASHBOARD
+========================================================= */
+function renderDashboard(){
+  const totalCap = employees.reduce((s,e)=>s+e.capacity,0);
+  const totalUsed = employees.reduce((s,e)=>s+assignedHoursInWeek(e.id,0),0);
+  const overloaded = employees.filter(e=>assignedHoursInWeek(e.id,0) > e.capacity).length;
+  const skillCoveragePct = Math.round((skillsList.filter(s=>employees.some(e=>e.skills[s])).length/skillsList.length)*100);
+
+  return `
+    <div class="dash-search-wrap">
+      <input type="text" id="dash-search" placeholder="Search a person..." oninput="handleDashSearch(this.value)" onclick="event.stopPropagation()">
+      <div id="dash-search-results" class="dash-search-results"></div>
+    </div>
+
+    <div class="dash-hero">
+      <div class="dash-stat"><div class="dash-num">${employees.length}</div><div class="dash-label">Team members</div></div>
+      <div class="dash-stat"><div class="dash-num">${unassignedTasks.length}</div><div class="dash-label">Unassigned tasks</div></div>
+      <div class="dash-stat"><div class="dash-num">${Math.round((totalUsed/totalCap)*100)}%</div><div class="dash-label">Team utilisation</div>
+        <div class="dash-flag" style="color:var(--teal);"><span class="dot" style="background:var(--teal);"></span>Healthy</div></div>
+      <div class="dash-stat"><div class="dash-num">${overloaded}</div><div class="dash-label">Overloaded this week</div>
+        <div class="dash-flag" style="color:${overloaded>0?'var(--rust)':'var(--teal)'};"><span class="dot" style="background:${overloaded>0?'var(--rust)':'var(--teal)'};"></span>${overloaded>0?'Needs review':'None'}</div></div>
+    </div>
+
+    <div class="dash-section">
+      <div class="dash-section-head"><h3>Workload by person</h3><span class="pill">This week \u00b7 click a name for detail</span></div>
+      ${employees.map(e=>{
+        const used = assignedHoursInWeek(e.id,0);
+        const pct = Math.min(100, Math.round((used/e.capacity)*100));
+        const over = used > e.capacity;
+        return `<div class="workload-row" onclick="openPersonModal('${e.id}')">
+          ${avatarHTML(e, 28, '0.6875rem')}
+          <div style="width:120px; font-size:0.7812rem; font-weight:600;">${e.name}</div>
+          <div class="thread-track"><div class="thread-fill" style="width:${pct}%; background:${over?'var(--rust)':pct>85?'var(--brass)':'var(--teal)'};"></div></div>
+          <div class="mono" style="font-size:0.7188rem; color:var(--ink-soft); width:70px; text-align:right;">${used}/${e.capacity}h</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="dash-section">
+      <div class="dash-section-head"><h3>Skill coverage</h3><span class="pill req">${skillCoveragePct}% of catalog staffed</span></div>
+      <div class="coverage-row">
+        ${skillsList.map(s=>{
+          const has = employees.some(e=>e.skills[s]);
+          return `<div class="coverage-item"><span class="dot" style="background:${has?'var(--teal)':'var(--rust)'};"></span><span>${s}${has?'':' — gap'}</span></div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+function handleDashSearch(q){
+  const box = document.getElementById('dash-search-results');
+  if(!q){ box.classList.remove('open'); box.innerHTML=''; return; }
+  const matches = employees.filter(e=>e.name.toLowerCase().includes(q.toLowerCase()));
+  box.innerHTML = matches.length ? matches.map(e=>`
+    <div class="dash-search-item" onclick="event.stopPropagation(); selectSearchResult('${e.id}')">
+      ${avatarHTML(e, 26, '0.6562rem')}<span>${e.name}</span>
+    </div>`).join('') : `<div class="dash-search-empty">No matches</div>`;
+  box.classList.add('open');
+}
+function selectSearchResult(id){
+  document.getElementById('dash-search').value = '';
+  document.getElementById('dash-search-results').classList.remove('open');
+  openPersonModal(id);
+}
+
+/* ---------- Person detail modal ---------- */
+function openPersonModal(id){ state.personModal = { empId:id, range:'week', monthOffset:0 }; renderModal(); }
+function closePersonModal(){ state.personModal = null; renderModal(); }
+function setModalRange(r){ state.personModal.range = r; renderModal(); }
+function shiftModalMonth(d){ state.personModal.monthOffset = (state.personModal.monthOffset||0)+d; renderModal(); }
+
+function renderModal(){
+  const root = document.getElementById('modal-root');
+  if(!state.personModal){ root.innerHTML=''; return; }
+  const e = empById(state.personModal.empId);
+  if(!e){ state.personModal=null; root.innerHTML=''; return; }
+  const range = state.personModal.range;
+  root.innerHTML = `<div class="modal-backdrop" onclick="closePersonModal()">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <button class="modal-back" onclick="closePersonModal()">&#8592; Back to dashboard</button>
+        <div class="modal-person-row">
+          ${avatarHTML(e, 44, '0.9375rem')}
+          <div><div style="font-family:'Space Grotesk'; font-weight:700; font-size:1.0625rem;">${e.name}</div>
+          <div style="font-size:0.7812rem; color:var(--ink-soft);">${e.title} \u00b7 ${e.email}</div></div>
+        </div>
+        <div class="skill-tag-row" style="margin-top:12px;">${Object.entries(e.skills).map(([s,l])=>`<span class="skill-tag">${s} L${l}</span>`).join('') || '<span class="field-hint">No skills recorded</span>'}</div>
+      </div>
+      <div class="modal-body">
+        <div class="seg-switch" style="margin-bottom:16px;">
+          <button class="${range==='week'?'active':''}" onclick="setModalRange('week')">This week</button>
+          <button class="${range==='month'?'active':''}" onclick="setModalRange('month')">This month</button>
+        </div>
+        ${range==='week' ? renderModalWeek(e) : renderModalMonth(e)}
+      </div>
+    </div>
+  </div>`;
+}
+function explainFit(emp, a){
+  const lvl = emp.skills[a.reqSkill];
+  if(lvl===undefined) return `No recorded ${a.reqSkill} experience on file \u2014 lowest-confidence match.`;
+  if(lvl>=a.reqLevel) return `${a.reqSkill} L${lvl} meets the L${a.reqLevel} required for this task.`;
+  return `${a.reqSkill} L${lvl} is below the L${a.reqLevel} this task asks for.`;
+}
+function fmtDate(iso_){
+  if(!iso_) return null;
+  const [y,m,d] = iso_.split('-').map(Number);
+  return `${d} ${MONTH_NAMES[m-1].slice(0,3)} ${y}`;
+}
+function taskDetailCard(emp, a){
+  const score = matchScore(emp, a, 0);
+  return `<div class="modal-task-card">
+    <div class="modal-task-top">
+      <div>
+        <div class="modal-task-name">${a.name}</div>
+        ${a.client ? `<div class="modal-task-client">${a.client}</div>` : `<div class="modal-task-client" style="color:var(--ink-faint);">Internal \u2014 no client attached</div>`}
+      </div>
+      ${miniDial(score,34)}
+    </div>
+    <div class="modal-task-meta">
+      Starts ${fmtDate(a.day)}${(a.duration||1)>1?` \u00b7 spans ${a.duration} days`:''} \u00b7 ${a.hours}h estimated${a.deadline?` \u00b7 due ${fmtDate(a.deadline)}`:''}
+    </div>
+    <div class="modal-task-fit">${explainFit(emp, a)}</div>
+  </div>`;
+}
+function renderModalWeek(e){
+  const dates = weekDates(0);
+  const used = assignedHoursInWeek(e.id,0);
+  const pct = Math.min(100, Math.round((used/e.capacity)*100));
+  const mine = assignments.filter(a=>a.empId===e.id && dates.map(iso).includes(a.day)).sort((x,z)=>x.day<z.day?-1:1);
+  return `
+    <div class="cap-bar-track" style="width:100%; margin-bottom:6px;"><div class="cap-bar-fill" style="width:${pct}%; background:${used>e.capacity?'var(--rust)':pct>85?'var(--brass)':'var(--teal)'};"></div></div>
+    <div class="mono" style="font-size:0.75rem; color:var(--ink-soft); margin-bottom:16px;">${used}/${e.capacity}h booked \u00b7 ${mine.length} task${mine.length===1?'':'s'} this week</div>
+    ${mine.length ? mine.map(a=>taskDetailCard(e,a)).join('') : `<div class="empty-note" style="padding:0;">Nothing assigned this week.</div>`}
+  `;
+}
+function renderModalMonth(e){
+  const off = state.personModal.monthOffset||0;
+  const d = new Date(2026,7+off,1);
+  const y = d.getFullYear(), m = d.getMonth();
+  const prefix = `${y}-${String(m+1).padStart(2,'0')}`;
+  const mine = assignments.filter(a=>a.empId===e.id && a.day.startsWith(prefix)).sort((x,z)=>x.day<z.day?-1:1);
+  const total = mine.reduce((s,a)=>s+a.hours,0);
+  return `
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+      <button class="icon-btn" style="width:28px; height:28px;" onclick="shiftModalMonth(-1)">&#8249;</button>
+      <div class="mono" style="font-weight:600; font-size:0.8125rem;">${MONTH_NAMES[m]} ${y}</div>
+      <button class="icon-btn" style="width:28px; height:28px;" onclick="shiftModalMonth(1)">&#8250;</button>
+      <span class="mono" style="margin-left:auto; font-size:0.75rem; color:var(--ink-soft);">${total}h booked</span>
+    </div>
+    ${mine.length ? mine.map(a=>taskDetailCard(e,a)).join('') : `<div class="empty-note" style="padding:0;">No assignments recorded in ${MONTH_NAMES[m]} ${y}.</div>`}
+  `;
+}
+
+/* =========================================================
+   SMART ALLOCATE
+========================================================= */
+function renderSmart(){
+  const s = state.smart;
+  return `<div class="panel" style="margin-bottom:20px;">
+    <div class="panel-head"><h3>Describe the work</h3></div>
+    <div style="padding:18px;">
+      <label class="field-label">Project</label>
+      <div class="seg-switch" style="margin-bottom:12px;">
+        <button class="${s.projectMode==='new'?'active':''}" onclick="smartSet('projectMode','new')">New project</button>
+        <button class="${s.projectMode==='existing'?'active':''}" onclick="smartSet('projectMode','existing')">Existing project</button>
+      </div>
+      ${s.projectMode==='new' ? `<div class="field-group"><input type="text" placeholder="e.g. Client Portal Revamp" value="${s.projectName}" onchange="smartSet('projectName', this.value)"></div>`
+        : `<div class="field-group"><select onchange="smartSet('existingProjectId', this.value)">${projects.map(p=>`<option value="${p.id}" ${s.existingProjectId===p.id?'selected':''}>${p.name}</option>`).join('')}</select></div>`}
+      <div class="field-row2">
+        <div class="field-group"><label class="field-label">Client / company name</label><input type="text" placeholder="e.g. Northbridge Retail" value="${s.clientName}" onchange="smartSet('clientName', this.value)"></div>
+        <div class="field-group"><label class="field-label">Hours needed</label><input type="number" min="1" value="${s.hours}" onchange="smartSet('hours', parseInt(this.value)||1)"></div>
+      </div>
+      <div class="field-group"><label class="field-label">Client details</label><textarea placeholder="Point of contact, background, anything relevant to staffing this work..." onchange="smartSet('clientInfo', this.value)">${s.clientInfo}</textarea></div>
+      <div class="field-group"><label class="field-label">Deadline</label><input type="date" value="${s.deadline}" onchange="smartSet('deadline', this.value)" style="max-width:220px;"></div>
+      <div class="field-group">
+        <label class="field-label">Skills required</label>
+        ${s.requirements.map((r,i)=>`
+          <div class="req-row">
+            <select onchange="smartReqField(${i},'skill',this.value)">${skillsList.map(sk=>`<option ${r.skill===sk?'selected':''}>${sk}</option>`).join('')}</select>
+            <select onchange="smartReqField(${i},'level',parseInt(this.value))">${[1,2,3,4,5].map(l=>`<option value="${l}" ${r.level===l?'selected':''}>Level ${l}</option>`).join('')}</select>
+            <label class="check-row"><input type="checkbox" ${r.mandatory?'checked':''} onchange="smartReqField(${i},'mandatory',this.checked)"> Required</label>
+            <button class="rm-btn" onclick="smartRemoveReq(${i})" title="Remove">&times;</button>
+          </div>`).join('')}
+        <button class="btn btn-ghost btn-sm" style="padding-left:0;" onclick="smartAddReq()">+ Add another skill</button>
+      </div>
+      <button class="btn btn-primary" onclick="runSmartSearch()">Search suitable employees</button>
+    </div>
+  </div>
+  <div id="smart-results">${s.results ? renderSmartResults() : ''}</div>`;
+}
+function smartSet(field, val){ state.smart[field] = val; renderPage(); }
+function smartReqField(i, field, val){ state.smart.requirements[i][field] = val; }
+function smartAddReq(){ state.smart.requirements.push({ skill:skillsList[0], level:3, mandatory:false }); renderPage(); }
+function smartRemoveReq(i){ state.smart.requirements.splice(i,1); renderPage(); }
+function attachSmartHandlers(){}
+
+function runSmartSearch(){
+  const s = state.smart;
+  const reqs = s.requirements;
+  const results = employees.map(emp=>{
+    const missingMandatory = reqs.filter(r=>r.mandatory && !emp.skills[r.skill]);
+    const perSkill = reqs.map(r=>{
+      const lvl = emp.skills[r.skill];
+      let sc;
+      if(lvl===undefined) sc = 15;
+      else if(lvl>=r.level) sc = Math.min(98, 82+(lvl-r.level)*6);
+      else sc = 40+lvl*6;
+      return { skill:r.skill, level:r.level, has:lvl, score:sc };
+    });
+    const skillScore = Math.round(perSkill.reduce((a,b)=>a+b.score,0)/perSkill.length);
+    const remaining = emp.capacity - assignedHoursInWeek(emp.id,0);
+    const availScore = Math.max(0, Math.min(100, Math.round((remaining/s.hours)*70)));
+    const balanceScore = Math.max(0, 100 - Math.round((assignedHoursInWeek(emp.id,0)/emp.capacity)*100));
+    const overall = Math.round(skillScore*0.65 + availScore*0.25 + balanceScore*0.10);
+
+    const strong = perSkill.filter(p=>p.has!==undefined && p.has>=p.level).map(p=>p.skill);
+    const weak = perSkill.filter(p=>p.has!==undefined && p.has<p.level).map(p=>`${p.skill} (has L${p.has}, needs L${p.level})`);
+    const missing = perSkill.filter(p=>p.has===undefined).map(p=>p.skill);
+    let explain = '';
+    if(strong.length) explain += `Meets or exceeds the required level in ${strong.join(', ')}. `;
+    if(weak.length) explain += `Below the requested level in ${weak.join(', ')}. `;
+    if(missing.length) explain += `No recorded experience in ${missing.join(', ')}. `;
+    explain += remaining >= s.hours ? `Has ${remaining}h free this week, enough to cover the ${s.hours}h estimate.` : `Only ${remaining}h free this week against a ${s.hours}h estimate — would run over capacity.`;
+
+    return { emp, overall, missingMandatory, explain };
+  });
+
+  const eligible = results.filter(r=>r.missingMandatory.length===0).sort((a,b)=>b.overall-a.overall);
+  const ineligible = results.filter(r=>r.missingMandatory.length>0);
+  state.smart.results = { eligible, ineligible };
+  document.getElementById('smart-results').innerHTML = renderSmartResults();
+}
+function renderSmartResults(){
+  const r = state.smart.results;
+  if(!r) return '';
+  return `<div class="panel">
+    <div class="panel-head"><h3>Suggested employees</h3><span class="pill req">${r.eligible.length} eligible</span></div>
+    ${r.eligible.map((row,i)=>`
+      <div class="rank-item">
+        <div class="rank-num">${String(i+1).padStart(2,'0')}</div>
+        ${avatarHTML(row.emp)}
+        <div class="rank-body">
+          <div class="rank-name-row"><span style="font-weight:600; font-size:0.875rem;">${row.emp.name}</span><span class="mono" style="font-size:0.6875rem; color:var(--ink-faint);">${row.emp.title}</span><span style="margin-left:auto;">${miniDial(row.overall,34)}</span></div>
+          <div class="rank-explain">${row.explain}</div>
+          <button class="btn btn-outline btn-sm" style="margin-top:10px;" onclick="assignFromSmart('${row.emp.id}')">Assign to this project</button>
+        </div>
+      </div>`).join('')}
+    ${r.ineligible.length ? `
+      <div class="panel-head" style="border-top:1px solid var(--line);"><h3 style="font-size:0.8125rem; color:var(--ink-soft);">Not eligible</h3><span class="pill warn">${r.ineligible.length}</span></div>
+      ${r.ineligible.map(row=>`
+        <div class="rank-item ineligible">
+          ${avatarHTML(row.emp)}
+          <div class="rank-body"><div style="font-weight:600; font-size:0.8438rem;">${row.emp.name}</div><div class="rank-explain">Missing required skill: ${row.missingMandatory.map(m=>m.skill).join(', ')}.</div></div>
+        </div>`).join('')}
+    ` : ''}
+  </div>`;
+}
+function assignFromSmart(empId){
+  const s = state.smart;
+  const projectName = s.projectMode==='new' ? (s.projectName || 'Untitled project') : projects.find(p=>p.id===s.existingProjectId).name;
+  const primaryReq = s.requirements[0];
+  const mondayThisWeek = iso(weekDates(0)[0]);
+  assignments.push({ id:'a'+(taskSeq++), name:projectName, hours:s.hours, reqSkill:primaryReq.skill, reqLevel:primaryReq.level, empId, day:mondayThisWeek, duration:1, client:s.clientName||null, deadline:s.deadline||null });
+  alert('Assigned. Open Schedule to see it on the calendar — you can drag it, or drag its edge to extend it across days.');
+}
+
+/* =========================================================
+   CALENDAR ENGINE (shared by Schedule + My Week)
+========================================================= */
+function computeLayout(empId, dates){
+  const dateIsoList = dates.map(iso);
+  const items = assignments.filter(a=>a.empId===empId && dateIsoList.includes(a.day))
+    .map(a=>{
+      const startIdx = dateIsoList.indexOf(a.day);
+      const duration = Math.max(1, Math.min(a.duration||1, 5-startIdx));
+      return { a, startIdx, duration };
+    }).sort((x,y)=>x.startIdx-y.startIdx);
+  const laneEnds = [];
+  items.forEach(it=>{
+    let lane = laneEnds.findIndex(end=> end < it.startIdx);
+    if(lane===-1){ lane = laneEnds.length; laneEnds.push(it.startIdx+it.duration-1); }
+    else laneEnds[lane] = it.startIdx+it.duration-1;
+    it.lane = lane;
+  });
+  return { items, maxLanes: Math.max(1, laneEnds.length) };
+}
+function calHeaderHTML(dates){
+  return `<div class="cal-header-row"><div class="cal-header-emp">Team member</div>
+    ${dates.map(d=>`<div class="cal-header-day">${dayShort(d)} <span class="mono" style="color:var(--ink-faint); font-weight:400;">${d.getDate()}</span></div>`).join('')}
+  </div>`;
+}
+function renderCalRow(emp, dates, editable){
+  const { items, maxLanes } = computeLayout(emp.id, dates);
+  const laneH = 54;
+  const rowMinH = Math.max(74, maxLanes*laneH + 16);
+  const used = assignedHoursInWeek(emp.id, state.weekOffset);
+  const pct = Math.min(100, Math.round((used/emp.capacity)*100));
+  const over = used > emp.capacity;
+  const dateIsoList = dates.map(iso);
+
+  const dayColsHTML = dates.map((d,i)=>{
+    const key = dateIsoList[i];
+    const off = emp.unavailableDates[key];
+    return `<div class="cal-daycol ${off?'unavailable':''}" data-emp="${emp.id}" data-day="${key}">${off?`<div class="day-off-label" title="${(off.note||'Unavailable').replace(/"/g,'&quot;')}">${ICONS.clock}<span>${off.note || 'Unavailable'}</span></div>`:''}</div>`;
+  }).join('');
+
+  const blocksHTML = items.map(({a,startIdx,duration,lane})=>{
+    const score = matchScore(emp, a, state.weekOffset);
+    const left = startIdx/5*100, width = duration/5*100;
+    return `<div class="task-block ${matchClass(score)}" style="left:calc(${left}% + 3px); width:calc(${width}% - 6px); top:${lane*laneH+6}px;" ${editable?`draggable="true" data-assignment="${a.id}"`:''}>
+      <div class="chip-top"><div><div class="chip-name">${a.name}</div><div class="chip-hrs mono">${a.hours}h \u00b7 ${a.reqSkill} L${a.reqLevel}</div></div>${miniDial(score,26)}</div>
+      ${editable?`<div class="resize-handle" data-assignment="${a.id}"></div><button class="block-remove" onclick="event.stopPropagation(); unassignTask('${a.id}')" title="Unassign">&times;</button>`:''}
+    </div>`;
+  }).join('');
+
+  return `<div class="cal-body-row">
+    <div class="emp-cell"><div class="emp-id">
+      ${avatarHTML(emp)}
+      <div><div class="emp-name">${emp.name}</div>
+        <div class="cap-bar-track"><div class="cap-bar-fill" style="width:${pct}%; background:${over?'var(--rust)':pct>85?'var(--brass)':'var(--teal)'};"></div></div>
+        <div class="cap-txt mono">${used}/${emp.capacity}h</div>
+      </div></div></div>
+    <div class="cal-daysarea" style="min-height:${rowMinH}px;">${dayColsHTML}${blocksHTML}</div>
+  </div>`;
+}
+function unassignTask(id){
+  const idx = assignments.findIndex(a=>a.id===id);
+  if(idx===-1) return;
+  const a = assignments[idx];
+  assignments.splice(idx,1);
+  unassignedTasks.push({ id:'t'+(taskSeq++), name:a.name, hours:a.hours, reqSkill:a.reqSkill, reqLevel:a.reqLevel });
+  renderPage();
+}
+function attachDnD(){
+  document.querySelectorAll('.tray-item').forEach(el=>{
+    el.addEventListener('dragstart', ev=> ev.dataTransfer.setData('text/plain', JSON.stringify({type:'tray', id:el.dataset.task})));
+  });
+  document.querySelectorAll('.task-block').forEach(el=>{
+    el.addEventListener('dragstart', ev=> ev.dataTransfer.setData('text/plain', JSON.stringify({type:'assignment', id:el.dataset.assignment})));
+  });
+  document.querySelectorAll('.cal-daycol').forEach(cell=>{
+    cell.addEventListener('dragover', ev=>{ ev.preventDefault(); if(!cell.classList.contains('unavailable')) cell.classList.add('dragover'); });
+    cell.addEventListener('dragleave', ()=> cell.classList.remove('dragover'));
+    cell.addEventListener('drop', ev=>{
+      ev.preventDefault(); cell.classList.remove('dragover');
+      const data = JSON.parse(ev.dataTransfer.getData('text/plain'));
+      const empId = cell.dataset.emp, day = cell.dataset.day, emp = empById(empId);
+      if(emp.unavailableDates[day]){ cell.classList.add('denied'); setTimeout(()=>cell.classList.remove('denied'),700); return; }
+      const dates = weekDates(state.weekOffset).map(iso);
+      const startIdx = dates.indexOf(day);
+      if(data.type==='tray'){
+        const idx = unassignedTasks.findIndex(t=>t.id===data.id); if(idx===-1) return;
+        const t = unassignedTasks[idx]; unassignedTasks.splice(idx,1);
+        assignments.push({ id:'a'+(taskSeq++), name:t.name, hours:t.hours, reqSkill:t.reqSkill, reqLevel:t.reqLevel, empId, day, duration:1 });
+      } else {
+        const a = assignments.find(x=>x.id===data.id); if(!a) return;
+        let dur = a.duration||1;
+        dur = Math.min(dur, 5-startIdx);
+        for(let i=startIdx+1;i<startIdx+dur;i++){ if(emp.unavailableDates[dates[i]]){ dur = i-startIdx; break; } }
+        a.empId = empId; a.day = day; a.duration = Math.max(1,dur);
+      }
+      renderPage();
+    });
+  });
+  attachResize();
+}
+function attachResize(){
+  document.querySelectorAll('.resize-handle').forEach(handle=>{
+    handle.addEventListener('mousedown', ev=>{
+      ev.preventDefault(); ev.stopPropagation();
+      const block = handle.closest('.task-block');
+      const areaEl = block.parentElement;
+      const a = assignments.find(x=>x.id===handle.dataset.assignment);
+      if(!a) return;
+      const emp = empById(a.empId);
+      const dates = weekDates(state.weekOffset).map(iso);
+      const startIdx = dates.indexOf(a.day);
+      const areaRect = areaEl.getBoundingClientRect();
+      const colWidth = areaRect.width/5;
+      function onMove(e){
+        const rel = e.clientX - areaRect.left;
+        let endIdx = Math.round(rel/colWidth)-1;
+        endIdx = Math.max(startIdx, Math.min(4,endIdx));
+        for(let i=startIdx+1;i<=endIdx;i++){ if(emp.unavailableDates[dates[i]]){ endIdx = i-1; break; } }
+        const duration = endIdx-startIdx+1;
+        block.style.width = `calc(${duration/5*100}% - 6px)`;
+        block.dataset.pendingDuration = duration;
+      }
+      function onUp(){
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        a.duration = parseInt(block.dataset.pendingDuration || (a.duration||1));
+        renderPage();
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
+/* ---------- SCHEDULE (manager) ---------- */
+function renderSchedule(){
+  const dates = weekDates(state.weekOffset);
+  return `<div class="allocate-layout">
+    <div class="panel cal-wrap"><div class="cal-grid">${calHeaderHTML(dates)}${employees.map(e=>renderCalRow(e, dates, true)).join('')}</div></div>
+    <div class="panel">
+      <div class="panel-head"><h3>Unassigned</h3><span class="pill">${unassignedTasks.length}</span></div>
+      <div id="tray">${unassignedTasks.length ? unassignedTasks.map(t=>`
+        <div class="tray-item" draggable="true" data-task="${t.id}">
+          <div class="tray-item-name">${t.name}</div>
+          <div class="tray-item-meta"><span class="pill req">${t.reqSkill} \u00b7 L${t.reqLevel}</span><span class="pill mono">${t.hours}h</span></div>
+        </div>`).join('') : `<div class="tray-empty">Every task is assigned.<br>Nice and balanced.</div>`}</div>
+    </div>
+  </div>`;
+}
+
+/* =========================================================
+   TEAM (manager)
+========================================================= */
+function renderTeam(){
+  return `<div class="panel" style="margin-bottom:18px;">
+    <div class="panel-head"><h3>Active team</h3><button class="btn btn-primary btn-sm" onclick="toggleInviteForm()">Invite team member</button></div>
+    <div id="invite-form-wrap"></div>
+    ${employees.map(e=>{
+      const used = assignedHoursInWeek(e.id,0);
+      return `<div class="list-row">
+        ${avatarHTML(e, 38, '0.8125rem')}
+        <div style="flex:1;"><div class="emp-name" style="font-size:0.8438rem;">${e.name}</div><div class="mono" style="font-size:0.6875rem; color:var(--ink-soft);">${e.email} \u00b7 ${e.title}</div>
+          <div class="skill-tag-row">${Object.entries(e.skills).map(([s,l])=>`<span class="skill-tag">${s} L${l}</span>`).join('')}</div></div>
+        <div class="mono" style="font-size:0.7188rem; color:var(--ink-soft); width:70px; text-align:right;">${used}/${e.capacity}h</div>
+        <button class="btn btn-danger-ghost btn-sm" onclick="removeEmployee('${e.id}')">Remove</button>
+      </div>`;
+    }).join('')}
+  </div>
+  ${invites.length ? `<div class="panel"><div class="panel-head"><h3>Pending invitations</h3></div>
+    ${invites.map(inv=>`<div class="list-row">
+      <div class="avatar" style="background:var(--ink-faint); width:34px; height:34px; font-size:0.6875rem;">${inv.name.split(' ').map(w=>w[0]).join('').toUpperCase()}</div>
+      <div style="flex:1;"><div style="font-weight:600; font-size:0.8125rem;">${inv.name}</div><div class="mono" style="font-size:0.6875rem; color:var(--ink-soft);">${inv.email}</div></div>
+      <span class="invite-status">Invitation sent</span>
+      <button class="btn btn-outline btn-sm" onclick="acceptInvite('${inv.id}')">Simulate acceptance</button>
+    </div>`).join('')}</div>` : ''}`;
+}
+function toggleInviteForm(){
+  const wrap = document.getElementById('invite-form-wrap');
+  if(wrap.innerHTML){ wrap.innerHTML=''; return; }
+  wrap.innerHTML = `<div class="inline-form">
+    <div class="field-group"><label class="field-label">Name</label><input type="text" id="inv-name" placeholder="Jordan Lee"></div>
+    <div class="field-group"><label class="field-label">Email</label><input type="email" id="inv-email" placeholder="jordan@company.com"></div>
+    <button class="btn btn-primary btn-sm" onclick="sendInvite()">Send invite</button>
+  </div>`;
+}
+function sendInvite(){
+  const name = document.getElementById('inv-name').value.trim();
+  const email = document.getElementById('inv-email').value.trim();
+  if(!name || !email) return;
+  invites.push({ id:'inv'+Date.now(), name, email, status:'pending' });
+  renderPage();
+}
+function acceptInvite(id){
+  const idx = invites.findIndex(i=>i.id===id); if(idx===-1) return;
+  const inv = invites[idx]; invites.splice(idx,1);
+  const initials = inv.name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  employees.push({ id:'e'+Date.now(), name:inv.name, email:inv.email, title:'New team member', init:initials, color:nextColor(), capacity:40, photo:null, skills:{}, unavailableDates:{} });
+  renderPage();
+}
+function removeEmployee(id){
+  if(!confirm('Remove this person from the team? Their assignments will be unassigned.')) return;
+  assignments.filter(a=>a.empId===id).forEach(a=>unassignedTasks.push({ id:'t'+(taskSeq++), name:a.name, hours:a.hours, reqSkill:a.reqSkill, reqLevel:a.reqLevel }));
+  assignments = assignments.filter(a=>a.empId!==id);
+  employees = employees.filter(e=>e.id!==id);
+  renderPage();
+}
+
+/* =========================================================
+   SKILLS (manager)
+========================================================= */
+function renderSkills(){
+  return `<div class="panel" style="margin-bottom:18px;">
+    <div class="panel-head"><h3>Skill catalog</h3><span class="pill">${skillsList.length}</span></div>
+    <div class="skill-chip-cloud">${skillsList.map(s=>`<span class="skill-chip">${s}<button onclick="removeSkill('${s}')">&times;</button></span>`).join('')}</div>
+    <div class="add-skill-row">
+      <input type="text" id="new-skill-input" placeholder="Add a skill, e.g. Kubernetes" onkeydown="if(event.key==='Enter') addSkill()">
+      <button class="btn btn-primary btn-sm" onclick="addSkill()">Add skill</button>
+    </div>
+  </div>
+  <div class="panel"><div class="panel-head"><h3>Skill matrix</h3></div>
+    <table class="matrix">
+      <thead><tr><th>Team member</th>${skillsList.map(s=>`<th>${s}</th>`).join('')}</tr></thead>
+      <tbody>${employees.map(e=>`<tr>
+        <td><div class="emp-id">${avatarHTML(e, 26, '0.6562rem')}<span style="font-size:0.7812rem; font-weight:600;">${e.name}</span></div></td>
+        ${skillsList.map(s=>{
+          const lvl = e.skills[s];
+          if(!lvl) return `<td><span class="mono" style="color:var(--ink-faint); font-size:0.6875rem;">\u2014</span></td>`;
+          return `<td><div class="dotrow">${[1,2,3,4,5].map(i=>`<div class="dot ${i<=lvl?'filled':''}"></div>`).join('')}<span class="mono" style="font-size:0.6562rem; color:var(--ink-soft); margin-left:5px;">${lvl}</span></div></td>`;
+        }).join('')}
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+}
+function addSkill(){
+  const input = document.getElementById('new-skill-input');
+  const v = input.value.trim();
+  if(!v || skillsList.includes(v)) return;
+  skillsList.push(v); renderPage();
+}
+function removeSkill(s){
+  skillsList = skillsList.filter(x=>x!==s);
+  employees.forEach(e=>{ delete e.skills[s]; });
+  renderPage();
+}
+
+/* =========================================================
+   COMPANY (manager)
+========================================================= */
+function renderSetGeneral(){
+  const c = state.company;
+  const initials = (c.name||'W').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  return `<div class="panel" style="margin-bottom:18px;"><div style="padding:18px; display:flex; align-items:center; gap:16px;">
+    ${avatarHTML({ photo:c.managerPhoto, color:'#2F6F63', init:initials }, 56, '1.125rem')}
+    <div>
+      <div class="field-label" style="margin-bottom:8px;">Your profile photo</div>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('manager-photo-input').click()">Change photo</button>
+      ${c.managerPhoto ? `<button class="btn btn-ghost btn-sm" onclick="removeManagerPhoto()">Remove</button>` : ''}
+      <input type="file" id="manager-photo-input" accept="image/*" style="display:none;" onchange="handleManagerPhoto(this)">
+    </div>
+  </div></div>
+  <div class="panel"><div style="padding:18px; max-width:440px;">
+    <div class="field-group"><label class="field-label">Company name</label><input type="text" value="${c.name}" onchange="state.company.name=this.value; renderSidebar();"></div>
+    <div class="field-row2">
+      <div class="field-group"><label class="field-label">Industry</label><select onchange="state.company.industry=this.value;">${['Software & IT','Design & Creative','Consulting','Construction','Marketing'].map(i=>`<option ${c.industry===i?'selected':''}>${i}</option>`).join('')}</select></div>
+      <div class="field-group"><label class="field-label">Team size</label><select onchange="state.company.size=this.value;">${['2-10','11-50','51-200','200+'].map(i=>`<option ${c.size===i?'selected':''}>${i}</option>`).join('')}</select></div>
+    </div>
+    <div class="field-hint">Changes save automatically.</div>
+  </div></div>`;
+}
+function handleManagerPhoto(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){ state.company.managerPhoto = ev.target.result; renderSidebar(); renderPage(); };
+  reader.readAsDataURL(file);
+}
+function removeManagerPhoto(){ state.company.managerPhoto = null; renderSidebar(); renderPage(); }
+
+const INTEGRATIONS = [
+  { key:'asana', name:'Asana', letter:'A', color:'#F06A6A', desc:'Import and sync people and projects from Asana to kick-start your allocation.' },
+  { key:'jira', name:'Jira', letter:'J', color:'#2684FF', desc:'Import and sync projects, issues and people from Jira.' },
+  { key:'trello', name:'Trello', letter:'T', color:'#0079BF', desc:'Import boards, cards and people from Trello.' },
+  { key:'teamwork', name:'Teamwork', letter:'Tw', color:'#1E1E32', desc:'Import people and projects from Teamwork to kick-start your scheduling.' },
+];
+function renderSetIntegrations(){
+  return `<div class="panel">
+    <div class="panel-head"><h3>Project management</h3></div>
+    ${INTEGRATIONS.map(i=>`
+      <div class="toggle-row">
+        <div class="toggle-row-main">
+          <div class="toggle-icon" style="background:${i.color};">${i.letter}</div>
+          <div><div class="toggle-name">${i.name}</div><div class="toggle-desc">${i.desc}</div></div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+          <span class="mono" style="font-size:0.6875rem; color:var(--ink-faint);">${state.settings.integrations[i.key]?'on':'off'}</span>
+          <button class="btn btn-primary btn-sm" onclick="toggleIntegration('${i.key}')">Connect</button>
+        </div>
+      </div>`).join('')}
+  </div>
+  <div class="field-hint" style="padding:12px 4px;">Integrations are a visual placeholder in this prototype \u2014 connecting isn't wired up to a real import yet.</div>`;
+}
+function toggleIntegration(key){
+  alert(`Connecting ${key.charAt(0).toUpperCase()+key.slice(1)} isn't available in this prototype \u2014 this page is a visual placeholder for the real integration flow.`);
+}
+
+function renderSetNotifications(){
+  const n = state.settings.notif;
+  const rows = [
+    { key:'taskAssigned', name:'Task assigned', desc:'Email me when I\u2019m assigned to a new task.' },
+    { key:'overload', name:'Overload warning', desc:'Email me when a team member is booked over capacity.' },
+    { key:'weeklyDigest', name:'Weekly digest', desc:'A Monday-morning summary of the week\u2019s allocations.' },
+  ];
+  return `<div class="panel">
+    ${rows.map(r=>`
+      <div class="toggle-row">
+        <div class="toggle-row-main"><div><div class="toggle-name">${r.name}</div><div class="toggle-desc">${r.desc}</div></div></div>
+        <div class="switch ${n[r.key]?'on':''}" onclick="toggleNotif('${r.key}')"></div>
+      </div>`).join('')}
+  </div>`;
+}
+function toggleNotif(key){ state.settings.notif[key] = !state.settings.notif[key]; renderPage(); }
+
+function renderSetSecurity(){
+  const s = state.settings.security;
+  const rows = [
+    { key:'twoFactor', name:'Two-factor authentication', desc:'Require a verification code at sign-in, in addition to your password.' },
+    { key:'sessionTimeout', name:'Auto sign-out', desc:'Sign out automatically after 30 minutes of inactivity.' },
+  ];
+  return `<div class="panel">
+    ${rows.map(r=>`
+      <div class="toggle-row">
+        <div class="toggle-row-main"><div><div class="toggle-name">${r.name}</div><div class="toggle-desc">${r.desc}</div></div></div>
+        <div class="switch ${s[r.key]?'on':''}" onclick="toggleSecurity('${r.key}')"></div>
+      </div>`).join('')}
+  </div>`;
+}
+function toggleSecurity(key){ state.settings.security[key] = !state.settings.security[key]; renderPage(); }
+
+/* =========================================================
+   EMPLOYEE: MY WEEK
+========================================================= */
+function renderMyWeek(){
+  const e = empById(CURRENT_EMPLOYEE_ID);
+  const used = assignedHoursInWeek(e.id, state.weekOffset);
+  const pct = Math.min(100, Math.round((used/e.capacity)*100));
+  const dates = weekDates(state.weekOffset);
+  return `
+    <div class="panel" style="margin-bottom:18px; padding:16px 18px; display:flex; align-items:center; gap:16px;">
+      ${avatarHTML(e, 40, '0.875rem')}
+      <div style="flex:1;"><div style="font-size:0.875rem; font-weight:600;">${e.name}</div>
+        <div class="cap-bar-track" style="width:100%; margin-top:6px;"><div class="cap-bar-fill" style="width:${pct}%; background:${pct>100?'var(--rust)':pct>85?'var(--brass)':'var(--teal)'};"></div></div></div>
+      <div class="mono" style="font-size:0.8125rem; color:var(--ink-soft);">${used}/${e.capacity}h booked</div>
+    </div>
+    <div class="panel cal-wrap"><div class="cal-grid">${calHeaderHTML(dates)}${renderCalRow(e, dates, false)}</div></div>`;
+}
+
+/* ---------- EMPLOYEE: MY TASKS ---------- */
+function renderMyTasks(){
+  const e = empById(CURRENT_EMPLOYEE_ID);
+  const mine = assignments.filter(a=>a.empId===e.id);
+  return `<div class="panel">${mine.length ? mine.map(a=>{
+    const score = matchScore(e,a,0);
+    return `<div class="task-list-item"><div><div class="tli-name">${a.name}</div><div class="tli-meta">${a.day} \u00b7 ${a.hours}h \u00b7 needs ${a.reqSkill} L${a.reqLevel}${(a.duration||1)>1?` \u00b7 spans ${a.duration} days`:''}</div></div>${miniDial(score,34)}</div>`;
+  }).join('') : `<div class="empty-note">Nothing assigned yet this week.</div>`}</div>`;
+}
+
+/* ---------- EMPLOYEE: PROFILE ---------- */
+function renderProfile(){
+  const e = empById(CURRENT_EMPLOYEE_ID);
+  const available = skillsList.filter(s=>!e.skills[s]);
+  return `<div class="panel" style="margin-bottom:18px;">
+    <div class="panel-head"><h3>Personal information</h3></div>
+    <div style="padding:18px; max-width:440px;">
+      <div style="display:flex; align-items:center; gap:16px; margin-bottom:20px;">
+        ${avatarHTML(e, 56, '1.125rem')}
+        <div>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('profile-photo-input').click()">Change photo</button>
+          ${e.photo ? `<button class="btn btn-ghost btn-sm" onclick="removeMyPhoto()">Remove</button>` : ''}
+          <input type="file" id="profile-photo-input" accept="image/*" style="display:none;" onchange="handleProfilePhoto(this)">
+        </div>
+      </div>
+      <div class="field-group"><label class="field-label">Full name</label><input type="text" value="${e.name}" oninput="employees.find(x=>x.id==='${e.id}').name=this.value; renderSidebar();"></div>
+      <div class="field-group"><label class="field-label">Email</label><input type="email" value="${e.email}" oninput="employees.find(x=>x.id==='${e.id}').email=this.value;"></div>
+      <div class="field-group"><label class="field-label">Title / role</label><input type="text" value="${e.title}" oninput="employees.find(x=>x.id==='${e.id}').title=this.value; renderSidebar();"></div>
+      <div class="field-hint">Changes save automatically.</div>
+    </div>
+  </div>
+  <div class="panel"><div class="panel-head"><h3>My skills</h3></div>
+    <div class="skill-chip-cloud">${Object.entries(e.skills).map(([s,l])=>`<span class="skill-chip">${s} <span class="mono" style="color:var(--teal);">L${l}</span><button onclick="removeMySkill('${s}')">&times;</button></span>`).join('') || '<span class="empty-note" style="padding:0;">No skills added yet.</span>'}</div>
+    ${available.length ? `<div class="add-skill-row">
+      <select id="add-skill-select" style="flex:1;">${available.map(s=>`<option>${s}</option>`).join('')}</select>
+      <select id="add-skill-level" style="width:110px;">${[1,2,3,4,5].map(l=>`<option value="${l}" ${l===3?'selected':''}>Level ${l}</option>`).join('')}</select>
+      <button class="btn btn-primary btn-sm" onclick="addMySkill()">Add</button>
+    </div>` : `<div class="empty-note">Every catalog skill is already on your profile.</div>`}
+  </div>`;
+}
+function removeMySkill(s){ delete empById(CURRENT_EMPLOYEE_ID).skills[s]; renderPage(); }
+function handleProfilePhoto(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){ empById(CURRENT_EMPLOYEE_ID).photo = ev.target.result; renderSidebar(); renderPage(); };
+  reader.readAsDataURL(file);
+}
+function removeMyPhoto(){ empById(CURRENT_EMPLOYEE_ID).photo = null; renderSidebar(); renderPage(); }
+function addMySkill(){
+  const skill = document.getElementById('add-skill-select').value;
+  const level = parseInt(document.getElementById('add-skill-level').value);
+  empById(CURRENT_EMPLOYEE_ID).skills[skill] = level;
+  renderPage();
+}
+
+/* ---------- EMPLOYEE: AVAILABILITY ---------- */
+function renderAvailability(){
+  const e = empById(CURRENT_EMPLOYEE_ID);
+  const a = state.avail;
+  const daysInMonth = new Date(a.year, a.month+1, 0).getDate();
+  const firstDow = (new Date(a.year, a.month, 1).getDay()+6)%7;
+  const cells = [];
+  for(let i=0;i<firstDow;i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(d);
+  const upcoming = Object.entries(e.unavailableDates).sort(([a],[b])=>a<b?-1:1);
+
+  return `<div class="panel" style="margin-bottom:18px;">
+    <div class="avail-controls">
+      <select onchange="state.avail.month=parseInt(this.value); state.avail.selectedDate=null; renderPage();">${MONTH_NAMES.map((m,i)=>`<option value="${i}" ${a.month===i?'selected':''}>${m}</option>`).join('')}</select>
+      <select onchange="state.avail.year=parseInt(this.value); state.avail.selectedDate=null; renderPage();">${[2025,2026,2027].map(y=>`<option value="${y}" ${a.year===y?'selected':''}>${y}</option>`).join('')}</select>
+      <span class="field-hint" style="margin-left:auto;">Click a date to mark it unavailable</span>
+    </div>
+    <div class="month-grid">
+      ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="dow">${d}</div>`).join('')}
+      ${cells.map(d=>{
+        if(d===null) return `<div class="day-btn blank"></div>`;
+        const key = `${a.year}-${String(a.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const off = e.unavailableDates[key];
+        const sel = a.selectedDate===key;
+        return `<button class="day-btn ${off?'off':''} ${sel?'selected':''}" onclick="selectAvailDate('${key}')">${d}</button>`;
+      }).join('')}
+    </div>
+    ${a.selectedDate ? renderAvailEditor(e, a.selectedDate) : ''}
+  </div>
+  <div class="panel"><div class="panel-head"><h3>Marked unavailable</h3><span class="pill">${upcoming.length}</span></div>
+    ${upcoming.length ? upcoming.map(([date,info])=>`
+      <div class="unavail-list-item"><div><div class="unavail-date">${date}</div><div class="unavail-note">${info.note||'No reason given'}</div></div>
+      <button class="btn btn-danger-ghost btn-sm" onclick="clearAvailDate('${date}')">Remove</button></div>`).join('') : `<div class="empty-note">No dates marked unavailable.</div>`}
+  </div>`;
+}
+function renderAvailEditor(e, key){
+  const existing = e.unavailableDates[key];
+  return `<div class="avail-editor">
+    <div class="avail-editor-date">${key}</div>
+    <div class="field-group"><label class="field-label">Note (optional)</label><textarea id="avail-note" placeholder="e.g. Annual leave, medical appointment...">${existing?existing.note:''}</textarea></div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-primary btn-sm" onclick="markUnavailable('${key}')">${existing?'Update':'Mark unavailable'}</button>
+      ${existing ? `<button class="btn btn-outline btn-sm" onclick="clearAvailDate('${key}')">Remove</button>` : ''}
+      <button class="btn btn-ghost btn-sm" onclick="state.avail.selectedDate=null; renderPage();">Cancel</button>
+    </div>
+  </div>`;
+}
+function selectAvailDate(key){ state.avail.selectedDate = key; renderPage(); }
+function markUnavailable(key){
+  const note = document.getElementById('avail-note').value.trim();
+  empById(CURRENT_EMPLOYEE_ID).unavailableDates[key] = { note };
+  state.avail.selectedDate = null;
+  renderPage();
+}
+function clearAvailDate(key){
+  delete empById(CURRENT_EMPLOYEE_ID).unavailableDates[key];
+  state.avail.selectedDate = null;
+  renderPage();
+}
+
+/* =========================================================
+   INIT
+========================================================= */
+document.documentElement.setAttribute('data-theme', state.theme);
+document.documentElement.setAttribute('data-textsize', state.textSize);
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MANAGER
+  EMPLOYEE
+}
+
+enum TaskStatus {
+  UNASSIGNED
+  ASSIGNED
+}
+
+model Employee {
+  id            String   @id @default(cuid())
+  clerkId       String?  @unique
+  name          String
+  email         String   @unique
+  title         String
+  role          Role     @default(EMPLOYEE)
+  capacityHours Int      @default(40)
+  color         String   @default("#2F6F63")
+  createdAt     DateTime @default(now())
+
+  skills   EmployeeSkill[]
+  absences Absence[]
+  tasks    Task[]
+}
+
+model Skill {
+  id   String @id @default(cuid())
+  name String @unique
+
+  employeeSkills EmployeeSkill[]
+  taskReqs       TaskRequirement[]
+}
+
+model EmployeeSkill {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  skillId    String
+  skill      Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  level      Int
+
+  @@unique([employeeId, skillId])
+}
+
+model Project {
+  id         String    @id @default(cuid())
+  name       String
+  clientName String?
+  clientInfo String?
+  deadline   DateTime?
+  createdAt  DateTime  @default(now())
+
+  tasks Task[]
+}
+
+model Task {
+  id             String     @id @default(cuid())
+  name           String
+  estimatedHours Int
+  projectId      String?
+  project        Project?   @relation(fields: [projectId], references: [id])
+  employeeId     String?
+  employee       Employee?  @relation(fields: [employeeId], references: [id])
+  scheduledDate  DateTime?
+  duration       Int        @default(1)
+  status         TaskStatus @default(UNASSIGNED)
+  createdAt      DateTime   @default(now())
+
+  requirements TaskRequirement[]
+}
+
+model TaskRequirement {
+  id        String  @id @default(cuid())
+  taskId    String
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  skillId   String
+  skill     Skill   @relation(fields: [skillId], references: [id])
+  level     Int
+  mandatory Boolean @default(true)
+}
+
+model Absence {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime
+  note       String?
+
+  @@unique([employeeId, date])
+}
