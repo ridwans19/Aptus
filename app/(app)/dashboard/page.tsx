@@ -1,7 +1,9 @@
+import { requireManager } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import DashboardClient from './DashboardClient';
 
 export default async function DashboardPage() {
+  await requireManager();
   const employees = await prisma.employee.findMany({
     include: { skills: { include: { skill: true } } },
   });

@@ -1,5 +1,7 @@
 'use server';
 
+import { assertManager } from '@/lib/auth';
+
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
@@ -23,6 +25,7 @@ type AssignInput = {
 };
 
 export async function assignTask(input: AssignInput) {
+  await assertManager();
   let projectId: string | null = null;
 
   if (input.projectMode === 'new' && input.projectName.trim()) {

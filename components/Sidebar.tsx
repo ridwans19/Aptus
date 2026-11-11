@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState} from 'react';
+import { UserButton } from '@clerk/nextjs';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: 'grid' },
@@ -56,7 +57,7 @@ const ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
-export default function Sidebar() {
+export default function Sidebar({ name }: { name: string }) {
   const pathname = usePathname();
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
 
@@ -134,9 +135,9 @@ export default function Sidebar() {
       </div>
 
       <div className="sidebar-foot">
-        <div className="avatar-sm" style={{ background: '#2F6F63' }}>M</div>
+        <UserButton />
         <div>
-          <div className="foot-name">Manager Name</div>
+          <div className="foot-name">{name}</div>
           <div className="foot-role">Manager</div>
         </div>
       </div>

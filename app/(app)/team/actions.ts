@@ -1,11 +1,14 @@
 'use server';
 
+import { assertManager } from '@/lib/auth';
+
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 const PALETTE = ['#2F6F63', '#C98A3E', '#5B6570', '#C1554B', '#3E7C9B', '#8C6FB5', '#4C8B4C'];
 
 export async function inviteEmployee(input: { name: string; email: string }) {
+  await assertManager();
   const name = input.name.trim();
   const email = input.email.trim();
   if (!name || !email) throw new Error('Name and email are required.');
@@ -30,6 +33,7 @@ export async function inviteEmployee(input: { name: string; email: string }) {
 }
 
 export async function removeEmployee(employeeId: string) {
+  await assertManager();
   // Unassign their tasks first (send them back to the pool) rather than
   // leaving orphaned assignments, then delete the employee record.
   await prisma.task.updateMany({

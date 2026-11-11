@@ -1,7 +1,9 @@
+import { requireManager } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ScheduleClient from './ScheduleClient';
 
 export default async function SchedulePage() {
+  await requireManager();
   const employeesRaw = await prisma.employee.findMany({
     include: { skills: { include: { skill: true } } },
     orderBy: { createdAt: 'asc' },

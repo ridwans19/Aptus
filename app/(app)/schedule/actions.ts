@@ -1,5 +1,7 @@
 'use server';
 
+import { assertManager } from '@/lib/auth';
+
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
@@ -13,6 +15,7 @@ function refreshScheduleViews() {
 // a specific employee + day. Duration is left untouched by moves between cells;
 // callers that want a fresh single-day slot should pass resetDuration.
 export async function placeTask(taskId: string, employeeId: string, day: string, resetDuration = false) {
+  await assertManager();
   await prisma.task.update({
     where: { id: taskId },
     data: {
@@ -26,11 +29,13 @@ export async function placeTask(taskId: string, employeeId: string, day: string,
 }
 
 export async function setDuration(taskId: string, duration: number) {
+  await assertManager();
   await prisma.task.update({ where: { id: taskId }, data: { duration: Math.max(1, duration) } });
   refreshScheduleViews();
 }
 
 export async function unassignTask(taskId: string) {
+  await assertManager();
   await prisma.task.update({
     where: { id: taskId },
     data: { employeeId: null, scheduledDate: null, status: 'UNASSIGNED', duration: 1 },
@@ -48,6 +53,7 @@ type QuickAddInput = {
 };
 
 export async function quickAddTask(input: QuickAddInput) {
+  await assertManager();
   const name = input.name.trim();
   if (!name) throw new Error('Task name is required.');
 

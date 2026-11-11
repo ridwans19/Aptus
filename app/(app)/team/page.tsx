@@ -1,8 +1,10 @@
+import { requireManager } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { assignedHoursInWeek } from '@/lib/scheduling';
 import TeamClient from './TeamClient';
 
 export default async function TeamPage() {
+  await requireManager();
   const employeesRaw = await prisma.employee.findMany({
     include: { skills: { include: { skill: true } } },
     orderBy: { createdAt: 'asc' },

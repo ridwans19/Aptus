@@ -1,9 +1,12 @@
 'use server';
 
+import { assertManager } from '@/lib/auth';
+
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
 export async function addSkill(name: string) {
+  await assertManager();
   const trimmed = name.trim();
   if (!trimmed) throw new Error('Skill name cannot be empty.');
 
@@ -19,6 +22,7 @@ export async function addSkill(name: string) {
 }
 
 export async function removeSkill(skillId: string) {
+  await assertManager();
   const usageCount = await prisma.taskRequirement.count({ where: { skillId } });
   if (usageCount > 0) {
     throw new Error(

@@ -1,3 +1,4 @@
+import { requireManager } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import SmartAllocateClient from './SmartAllocateClient';
 
@@ -15,6 +16,7 @@ function currentWeekRange() {
 }
 
 export default async function SmartAllocatePage() {
+  await requireManager();
   const employeesRaw = await prisma.employee.findMany({
     include: { skills: { include: { skill: true } } },
   });

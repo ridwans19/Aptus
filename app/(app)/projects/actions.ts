@@ -1,5 +1,7 @@
 'use server';
 
+import { assertManager } from '@/lib/auth';
+
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
@@ -17,6 +19,8 @@ type ProgressInput = 'NOT_STARTED' | 'IN_PROGRESS' | 'DONE';
 // whatever percent the manager sets (clamped to a sane 0-99 range, since
 // 100% belongs to DONE).
 export async function setTaskProgress(taskId: string, progress: ProgressInput, percent?: number) {
+  await assertManager();
+  if (!['NOT_STARTED', 'IN_PROGRESS', 'DONE'].includes(progress)) throw new Error('Invalid progress value.');
   let progressPercent = 0;
   if (progress === 'DONE') progressPercent = 100;
   else if (progress === 'IN_PROGRESS') progressPercent = Math.min(99, Math.max(0, percent ?? 0));
@@ -34,6 +38,7 @@ export async function setTaskProgress(taskId: string, progress: ProgressInput, p
 // that was assigned to someone is itself the "unassign" - there's no
 // separate step needed, since the Task row is what held that booking.
 export async function deleteProject(projectId: string) {
+  await assertManager();
   await prisma.task.deleteMany({ where: { projectId } });
   await prisma.project.delete({ where: { id: projectId } });
 

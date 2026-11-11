@@ -1,7 +1,9 @@
+import { requireManager } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import SkillsClient from './SkillsClient';
 
 export default async function SkillsPage() {
+  await requireManager();
   const skillRows = await prisma.skill.findMany({ orderBy: { name: 'asc' } });
   const employeesRaw = await prisma.employee.findMany({
     include: { skills: { include: { skill: true } } },

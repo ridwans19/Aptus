@@ -1,6 +1,16 @@
-import { clerkMiddleware } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 
-export default clerkMiddleware();
+const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)']);
+
+// First gate: you must be signed in to see anything except the sign-in and
+// sign-up pages. Which pages you may see (manager vs employee) is enforced
+// separately in the layouts, pages and server actions via lib/auth.ts.
+export default clerkMiddleware(async (auth, req) => {
+  if (isPublicRoute(req)) return;
+  const { userId } = await auth();
+  if (!userId) return NextResponse.redirect(new URL('/sign-in', req.url));
+});
 
 export const config = {
   matcher: [

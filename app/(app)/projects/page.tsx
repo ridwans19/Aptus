@@ -1,7 +1,9 @@
+import { requireManager } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ProjectsClient from './ProjectsClient';
 
 export default async function ProjectsPage() {
+  await requireManager();
   const projectsRaw = await prisma.project.findMany({
     include: {
       tasks: {
