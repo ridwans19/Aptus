@@ -10,6 +10,7 @@ import {
   matchClass,
   assignedHoursInWeek,
   reqSummary,
+  fmtDate,
 } from '@/lib/scheduling';
 import type { Employee, TaskLite, UnassignedTaskLite, Requirement } from '@/lib/scheduling';
 import MiniDial from '@/components/MiniDial';
@@ -31,6 +32,18 @@ const ClockIcon = () => (
   <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8">
     <circle cx="12" cy="12" r="9" />
     <path d="M12 7v5l3.5 2" />
+  </svg>
+);
+
+const ChevronLeftIcon = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M15 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -72,6 +85,8 @@ export default function ScheduleClient({ employees, assignments, unassignedTasks
   const [qaProjectId, setQaProjectId] = useState<string>('');
   const [qaReqs, setQaReqs] = useState<Requirement[]>([{ skill: skillsList[0] || '', level: 3 }]);
   const [qaSubmitting, setQaSubmitting] = useState(false);
+
+  const [detailTask, setDetailTask] = useState<{ task: TaskLite; empName: string } | null>(null);
 
   const dates = weekDates(weekOffset);
   const startLabel = dates[0].toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -169,9 +184,13 @@ export default function ScheduleClient({ employees, assignments, unassignedTasks
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-        <button className="icon-btn" onClick={() => setWeekOffset((o) => o - 1)}>Prev</button>
+        <button className="icon-btn" onClick={() => setWeekOffset((o) => o - 1)} aria-label="Previous week" title="Previous week">
+          <ChevronLeftIcon />
+        </button>
         <div className="mono" style={{ fontWeight: 600, fontSize: '0.8125rem' }}>{weekLabel}</div>
-        <button className="icon-btn" onClick={() => setWeekOffset((o) => o + 1)}>Next</button>
+        <button className="icon-btn" onClick={() => setWeekOffset((o) => o + 1)} aria-label="Next week" title="Next week">
+          <ChevronRightIcon />
+        </button>
         {weekOffset !== 0 && (
           <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(0)}>Today</button>
         )}
@@ -247,9 +266,10 @@ export default function ScheduleClient({ employees, assignments, unassignedTasks
                         <div
                           key={a.id}
                           className={blockClass}
-                          style={{ left: 'calc(' + left + '% + 3px)', width: 'calc(' + width + '% - 6px)', top: topOffset + lane * LANE_H, opacity: busyIds.has(a.id) ? 0.5 : 1 }}
+                          style={{ left: 'calc(' + left + '% + 3px)', width: 'calc(' + width + '% - 6px)', top: topOffset + lane * LANE_H, opacity: busyIds.has(a.id) ? 0.5 : 1, cursor: 'pointer' }}
                           draggable={!busyIds.has(a.id)}
                           onDragStart={(e) => e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'assignment', id: a.id }))}
+                          onClick={() => setDetailTask({ task: a, empName: emp.name })}
                         >
                        <div className="chip-top">
   <div style={{ minWidth: 0, flex: 1 }}>
@@ -279,9 +299,9 @@ export default function ScheduleClient({ employees, assignments, unassignedTasks
                             <MiniDial score={score} size={26} />
                           </div>
                           <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                            <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px' }} onClick={() => handleChangeDuration(a, -1)} title="Shorter" disabled={busyIds.has(a.id)}>-</button>
-                            <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px' }} onClick={() => handleChangeDuration(a, 1)} title="Longer" disabled={busyIds.has(a.id)}>+</button>
-                            <button className="block-remove" onClick={() => handleUnassign(a.id)} title="Unassign" disabled={busyIds.has(a.id)}>x</button>
+                            <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px' }} onClick={(e) => { e.stopPropagation(); handleChangeDuration(a, -1); }} title="Shorter" disabled={busyIds.has(a.id)}>-</button>
+                            <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px' }} onClick={(e) => { e.stopPropagation(); handleChangeDuration(a, 1); }} title="Longer" disabled={busyIds.has(a.id)}>+</button>
+                            <button className="block-remove" onClick={(e) => { e.stopPropagation(); handleUnassign(a.id); }} title="Unassign" disabled={busyIds.has(a.id)}>x</button>
                           </div>
                         </div>
                       );
@@ -376,6 +396,50 @@ export default function ScheduleClient({ employees, assignments, unassignedTasks
               <button className="btn btn-primary" onClick={submitQuickAdd} disabled={qaSubmitting}>
                 {qaSubmitting ? 'Adding...' : 'Add to schedule'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {detailTask && (
+        <div className="modal-backdrop" onClick={() => setDetailTask(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="modal-head">
+              <button className="modal-back" onClick={() => setDetailTask(null)}>
+                ← Back
+              </button>
+              <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: '1.0625rem' }}>
+                {detailTask.task.name}
+              </div>
+              <div style={{ fontSize: '0.7812rem', color: 'var(--ink-soft)' }}>
+                {detailTask.task.client ? detailTask.task.client + ' · ' : ''}Assigned to {detailTask.empName}
+              </div>
+            </div>
+
+            <div className="modal-body">
+              <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginBottom: 16 }}>
+                {detailTask.task.hours}h estimated · starts {fmtDate(detailTask.task.day)}
+                {detailTask.task.duration > 1 ? ` · spans ${detailTask.task.duration} days` : ''}
+              </div>
+
+              <div style={{ marginBottom: 16, padding: '10px 12px', borderRadius: 9, background: detailTask.task.deadline ? 'var(--rust-soft)' : 'var(--surface-alt)' }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: detailTask.task.deadline ? 'var(--rust)' : 'var(--ink-soft)' }}>
+                  {detailTask.task.deadline ? `Due ${fmtDate(detailTask.task.deadline)}` : 'No deadline set'}
+                </div>
+              </div>
+
+              <div className="field-label" style={{ marginBottom: 8 }}>Skills needed</div>
+              <div className="skill-tag-row">
+                {detailTask.task.requirements.length ? (
+                  detailTask.task.requirements.map((r) => (
+                    <span className="skill-tag" key={r.skill}>
+                      {r.skill} L{r.level}
+                    </span>
+                  ))
+                ) : (
+                  <span className="field-hint">No specific skills required</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
