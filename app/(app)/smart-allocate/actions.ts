@@ -3,6 +3,12 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 
+// Assumed working hours per day, matching the default 40h / 5-day employee
+// capacity. Used only to give a new task a sensible visual span on the
+// Schedule calendar — e.g. a 20h task reads as "spans 3 days", not
+// "20 hours crammed into a single day."
+const HOURS_PER_DAY = 8;
+
 type AssignInput = {
   taskName: string;
   projectMode: 'new' | 'existing';
@@ -44,6 +50,8 @@ export async function assignTask(input: AssignInput) {
     })
   );
 
+  const duration = Math.min(5, Math.max(1, Math.ceil(input.hours / HOURS_PER_DAY)));
+
   await prisma.task.create({
     data: {
       name: input.taskName,
@@ -52,7 +60,7 @@ export async function assignTask(input: AssignInput) {
       employeeId: input.employeeId,
       status: 'ASSIGNED',
       scheduledDate: new Date(),
-      duration: 1,
+      duration,
       requirements: { create: requirementCreates },
     },
   });

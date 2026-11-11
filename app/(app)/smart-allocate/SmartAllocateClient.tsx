@@ -42,6 +42,7 @@ type Props = {
 export default function SmartAllocateClient({ employees, skillsList, projects, weekHours }: Props) {
   const router = useRouter();
 
+  const [taskName, setTaskName] = useState('');
   const [projectMode, setProjectMode] = useState<'new' | 'existing'>('new');
   const [projectName, setProjectName] = useState('');
   const [existingProjectId, setExistingProjectId] = useState(projects[0]?.id || '');
@@ -56,7 +57,8 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
   const [assigning, setAssigning] = useState<string | null>(null);
 
   const canSearch =
-    projectMode === 'new' ? projectName.trim().length > 0 : existingProjectId.length > 0;
+    taskName.trim().length > 0 &&
+    (projectMode === 'new' ? projectName.trim().length > 0 : existingProjectId.length > 0);
 
   function updateReq(i: number, field: keyof Requirement, value: string | number | boolean) {
     setRequirements((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
@@ -117,14 +119,10 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
 
   async function assignFromSmart(empId: string) {
     setAssigning(empId);
-    const taskName =
-      projectMode === 'new'
-        ? projectName.trim()
-        : projects.find((p) => p.id === existingProjectId)?.name || 'Untitled task';
 
     try {
       await assignTask({
-        taskName,
+        taskName: taskName.trim(),
         projectMode,
         projectName,
         existingProjectId,
@@ -143,6 +141,7 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
   }
 
   function resetForm() {
+    setTaskName('');
     setProjectMode('new');
     setProjectName('');
     setExistingProjectId(projects[0]?.id || '');
@@ -161,6 +160,20 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
           <h3>Describe the work</h3>
         </div>
         <div style={{ padding: 18 }}>
+          <div className="field-group">
+            <label className="field-label">Task name</label>
+            <input
+              type="text"
+              placeholder="e.g. Build login flow"
+              value={taskName}
+              onChange={(e) => setTaskName(e.target.value)}
+            />
+            <div className="field-hint" style={{ marginTop: 4 }}>
+              This is one piece of work within the project below. A project usually needs several of these — run
+              Smart Allocate again for each task, picking the best-fit person each time.
+            </div>
+          </div>
+
           <label className="field-label">Project</label>
           <div className="seg-switch" style={{ marginBottom: 12 }}>
             <button className={projectMode === 'new' ? 'active' : ''} onClick={() => setProjectMode('new')}>
@@ -183,11 +196,16 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
           ) : (
             <div className="field-group">
               {projects.length ? (
-                <select value={existingProjectId} onChange={(e) => setExistingProjectId(e.target.value)}>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <>
+                  <select value={existingProjectId} onChange={(e) => setExistingProjectId(e.target.value)}>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <div className="field-hint" style={{ marginTop: 4 }}>
+                    Adding "{taskName.trim() || 'this task'}" as another task under this project.
+                  </div>
+                </>
               ) : (
                 <div className="field-hint">No existing projects yet - switch to "New project".</div>
               )}
@@ -274,7 +292,11 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
           </button>
           {!canSearch && (
             <div className="field-hint" style={{ marginTop: 6 }}>
-              {projectMode === 'new' ? 'Give the project a name first.' : 'Add a project first, or switch to "New project".'}
+              {!taskName.trim()
+                ? 'Give this task a name first.'
+                : projectMode === 'new'
+                  ? 'Give the project a name first.'
+                  : 'Add a project first, or switch to "New project".'}
             </div>
           )}
         </div>
