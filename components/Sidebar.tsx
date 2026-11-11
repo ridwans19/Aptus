@@ -6,6 +6,7 @@ import { useState} from 'react';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: 'grid' },
+  { href: '/projects', label: 'Projects', icon: 'folder' },
   { href: '/smart-allocate', label: 'Smart Allocate', icon: 'sparkle', hero: true },
   { href: '/schedule', label: 'Schedule', icon: 'calendar' },
   { href: '/team', label: 'Team', icon: 'users' },
@@ -33,6 +34,11 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6" />
       <circle cx="17" cy="9" r="2.6" />
       <path d="M15.5 14.2c2.4.3 4.5 2.3 4.5 5.8" />
+    </svg>
+  ),
+  folder: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
     </svg>
   ),
   matrix: (

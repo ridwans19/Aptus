@@ -17,6 +17,14 @@ enum TaskStatus {
   ASSIGNED
 }
 
+// Tracks how much of a task's actual work is done, separate from TaskStatus
+// (which only tracks whether the task has been assigned to someone).
+enum TaskProgress {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+}
+
 model Employee {
   id            String   @id @default(cuid())
   clerkId       String?  @unique
@@ -74,6 +82,8 @@ model Task {
   scheduledDate  DateTime?
   duration       Int        @default(1)
   status         TaskStatus @default(UNASSIGNED)
+  progress       TaskProgress @default(NOT_STARTED)
+  progressPercent Int        @default(0)
   createdAt      DateTime   @default(now())
 
   requirements TaskRequirement[]
