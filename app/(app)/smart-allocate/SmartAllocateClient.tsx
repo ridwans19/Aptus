@@ -3,6 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { assignTask } from './actions';
+import MiniDial from '@/components/MiniDial';
+
+// Allocation score weighting — see dissertation Section 4 (AHP weight derivation).
+// Currently placeholder values pending stakeholder pairwise comparisons.
+const WEIGHT_SKILL_MATCH = 0.65;
+const WEIGHT_AVAILABILITY = 0.25;
+const WEIGHT_WORKLOAD_BALANCE = 0.1;
 
 type Employee = {
   id: string;
@@ -32,37 +39,6 @@ type Props = {
   weekHours: Record<string, number>;
 };
 
-function matchColor(score: number) {
-  return score >= 80 ? 'var(--teal)' : score >= 55 ? 'var(--brass)' : 'var(--rust)';
-}
-
-function MiniDial({ score, size = 34 }: { score: number; size?: number }) {
-  const r = size / 2 - 3;
-  const c = 2 * Math.PI * r;
-  const off = c - (score / 100) * c;
-  const color = matchColor(score);
-  return (
-    <svg className="dial" width={size} height={size} viewBox={'0 0 ' + size + ' ' + size}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-alt)" strokeWidth="3" />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth="3"
-        strokeDasharray={c}
-        strokeDashoffset={off}
-        strokeLinecap="round"
-        transform={'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')'}
-      />
-      <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle" fontFamily="IBM Plex Mono" fontSize={size * 0.3} fill={color} fontWeight="600">
-        {score}
-      </text>
-    </svg>
-  );
-}
-
 export default function SmartAllocateClient({ employees, skillsList, projects, weekHours }: Props) {
   const router = useRouter();
 
@@ -78,6 +54,9 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
   ]);
   const [results, setResults] = useState<{ eligible: ResultRow[]; ineligible: ResultRow[] } | null>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
+
+  const canSearch =
+    projectMode === 'new' ? projectName.trim().length > 0 : existingProjectId.length > 0;
 
   function updateReq(i: number, field: keyof Requirement, value: string | number | boolean) {
     setRequirements((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
@@ -109,7 +88,9 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
       const remaining = emp.capacity - used;
       const availScore = Math.max(0, Math.min(100, Math.round((remaining / hours) * 70)));
       const balanceScore = Math.max(0, 100 - Math.round((used / emp.capacity) * 100));
-      const overall = Math.round(skillScore * 0.65 + availScore * 0.25 + balanceScore * 0.1);
+      const overall = Math.round(
+        skillScore * WEIGHT_SKILL_MATCH + availScore * WEIGHT_AVAILABILITY + balanceScore * WEIGHT_WORKLOAD_BALANCE
+      );
 
       const strong = perSkill.filter((p) => p.has !== undefined && p.has >= p.level).map((p) => p.skill);
       const weak = perSkill
@@ -138,7 +119,7 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
     setAssigning(empId);
     const taskName =
       projectMode === 'new'
-        ? projectName.trim() || 'Untitled task'
+        ? projectName.trim()
         : projects.find((p) => p.id === existingProjectId)?.name || 'Untitled task';
 
     try {
@@ -155,10 +136,22 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
         employeeId: empId,
       });
       router.refresh();
-      setResults(null);
+      resetForm();
     } finally {
       setAssigning(null);
     }
+  }
+
+  function resetForm() {
+    setProjectMode('new');
+    setProjectName('');
+    setExistingProjectId(projects[0]?.id || '');
+    setClientName('');
+    setClientInfo('');
+    setHours(20);
+    setDeadline('');
+    setRequirements([{ skill: skillsList[0] || '', level: 4, mandatory: true }]);
+    setResults(null);
   }
 
   return (
@@ -276,9 +269,14 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
             </button>
           </div>
 
-          <button className="btn btn-primary" onClick={runSmartSearch}>
+          <button className="btn btn-primary" onClick={runSmartSearch} disabled={!canSearch}>
             Search suitable employees
           </button>
+          {!canSearch && (
+            <div className="field-hint" style={{ marginTop: 6 }}>
+              {projectMode === 'new' ? 'Give the project a name first.' : 'Add a project first, or switch to "New project".'}
+            </div>
+          )}
         </div>
       </div>
 
@@ -302,7 +300,7 @@ export default function SmartAllocateClient({ employees, skillsList, projects, w
                     {row.emp.title}
                   </span>
                   <span style={{ marginLeft: 'auto' }}>
-                    <MiniDial score={row.overall} />
+                    <MiniDial score={row.overall} size={34} />
                   </span>
                 </div>
                 <div className="rank-explain">{row.explain}</div>

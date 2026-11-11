@@ -1,15 +1,37 @@
 'use client';
 
-import { employees, assignments, assignedHoursInWeek, nextAbsence, fmtDate } from '@/lib/mock-data';
+import { fmtDate } from '@/lib/scheduling';
 
-export default function PersonModal({ empId, onClose }: { empId: string; onClose: () => void }) {
-  const emp = employees.find((e) => e.id === empId);
-  if (!emp) return null;
+type ModalEmployee = {
+  id: string;
+  name: string;
+  title: string;
+  email: string;
+  color: string;
+  capacity: number;
+  skills: Record<string, number>;
+};
 
-  const used = assignedHoursInWeek(emp.id);
-  const pct = Math.min(100, Math.round((used / emp.capacity) * 100));
-  const currentTasks = assignments.filter((a) => a.empId === emp.id);
-  const absence = nextAbsence(emp);
+type ModalTask = {
+  id: string;
+  name: string;
+  client: string | null;
+  day: string;
+  duration: number;
+  hours: number;
+  deadline: string | null;
+};
+
+type Props = {
+  emp: ModalEmployee;
+  weekHoursUsed: number;
+  currentTasks: ModalTask[];
+  absence: { date: string; note: string | null } | null;
+  onClose: () => void;
+};
+
+export default function PersonModal({ emp, weekHoursUsed, currentTasks, absence, onClose }: Props) {
+  const pct = Math.min(100, Math.round((weekHoursUsed / emp.capacity) * 100));
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -20,7 +42,12 @@ export default function PersonModal({ empId, onClose }: { empId: string; onClose
           </button>
           <div className="modal-person-row">
             <div className="avatar" style={{ background: emp.color, width: 44, height: 44, fontSize: '0.9375rem' }}>
-              {emp.init}
+              {emp.name
+                .split(' ')
+                .map((w) => w[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase()}
             </div>
             <div>
               <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: '1.0625rem' }}>{emp.name}</div>
@@ -47,11 +74,11 @@ export default function PersonModal({ empId, onClose }: { empId: string; onClose
           <div className="cap-bar-track" style={{ width: '100%', marginBottom: 6 }}>
             <div
               className="cap-bar-fill"
-              style={{ width: `${pct}%`, background: used > emp.capacity ? 'var(--rust)' : pct > 85 ? 'var(--brass)' : 'var(--teal)' }}
+              style={{ width: `${pct}%`, background: weekHoursUsed > emp.capacity ? 'var(--rust)' : pct > 85 ? 'var(--brass)' : 'var(--teal)' }}
             />
           </div>
           <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginBottom: 16 }}>
-            {used}/{emp.capacity}h booked · {currentTasks.length} task{currentTasks.length === 1 ? '' : 's'} this week
+            {weekHoursUsed}/{emp.capacity}h booked this week · {currentTasks.length} task{currentTasks.length === 1 ? '' : 's'} assigned
           </div>
 
           {/* Next absence */}
@@ -59,9 +86,7 @@ export default function PersonModal({ empId, onClose }: { empId: string; onClose
             <div style={{ fontSize: '0.75rem', fontWeight: 600, color: absence ? 'var(--rust)' : 'var(--ink-soft)' }}>
               {absence ? `Away from ${fmtDate(absence.date)}` : 'No upcoming absences'}
             </div>
-            {absence && (
-              <div style={{ fontSize: '0.7188rem', color: 'var(--ink-soft)', marginTop: 2 }}>{absence.note}</div>
-            )}
+            {absence?.note && <div style={{ fontSize: '0.7188rem', color: 'var(--ink-soft)', marginTop: 2 }}>{absence.note}</div>}
           </div>
 
           {/* Current tasks */}
@@ -89,7 +114,7 @@ export default function PersonModal({ empId, onClose }: { empId: string; onClose
             ))
           ) : (
             <div className="empty-note" style={{ padding: 0 }}>
-              Nothing assigned this week.
+              Nothing assigned right now.
             </div>
           )}
         </div>

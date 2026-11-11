@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import PersonModal from '@/components/PersonModal';
-import { reqSummary } from '@/lib/mock-data';
-import type { Employee, Assignment, UnassignedTask } from '@/lib/mock-data';
+import { reqSummary, nextAbsence } from '@/lib/scheduling';
+import type { Employee, TaskLite as Assignment, UnassignedTaskLite as UnassignedTask } from '@/lib/scheduling';
 
 type Props = {
   employees: Employee[];
@@ -207,7 +207,20 @@ export default function DashboardClient({ employees, assignments, unassignedTask
         </div>
       )}
 
-      {personId && <PersonModal empId={personId} onClose={() => setPersonId(null)} />}
+      {personId && (() => {
+        const emp = employees.find((e) => e.id === personId);
+        if (!emp) return null;
+        const currentTasks = assignments.filter((a) => a.empId === personId);
+        return (
+          <PersonModal
+            emp={emp}
+            weekHoursUsed={hoursFor(personId, assignments)}
+            currentTasks={currentTasks}
+            absence={nextAbsence(emp.unavailableDates)}
+            onClose={() => setPersonId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

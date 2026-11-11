@@ -13,6 +13,13 @@ export default async function DashboardPage() {
     },
   });
 
+  const absences = await prisma.absence.findMany();
+  const absencesByEmployee: Record<string, Record<string, { note: string | null }>> = {};
+  for (const a of absences) {
+    const iso = a.date.toISOString().slice(0, 10);
+    (absencesByEmployee[a.employeeId] ??= {})[iso] = { note: a.note };
+  }
+
   const assignedTasks = tasks.filter((t) => t.status === 'ASSIGNED');
   const unassignedTasksRaw = tasks.filter((t) => t.status === 'UNASSIGNED');
 
@@ -25,7 +32,7 @@ export default async function DashboardPage() {
     color: e.color,
     capacity: e.capacityHours,
     skills: Object.fromEntries(e.skills.map((es) => [es.skill.name, es.level])),
-    unavailableDates: {} as Record<string, { note: string }>,
+    unavailableDates: absencesByEmployee[e.id] || {},
   }));
 
   const shapedAssignments = assignedTasks.map((t) => ({
