@@ -16,7 +16,7 @@ import { prisma } from '@/lib/prisma';
 
 export type AuthState =
   | { status: 'signed-out' }
-  | { status: 'no-access'; email: string | null }
+  | { status: 'no-access'; email: string | null; reason: string }
   | { status: 'ok'; employee: NonNullable<Awaited<ReturnType<typeof findEmployee>>> };
 
 async function findEmployee(email: string) {
@@ -33,7 +33,7 @@ export async function getAuthState(): Promise<AuthState> {
   // Only trust an email Clerk has verified, otherwise anyone could type a
   // manager's address into the sign-up form and inherit their role.
   if (!primary || primary.verification?.status !== 'verified') {
-    return { status: 'no-access', email: primary?.emailAddress ?? null };
+    return { status: 'no-access', email: primary?.emailAddress ?? null, reason: 'Clerk has not verified this email address yet.' };
   }
   const email = primary.emailAddress.trim().toLowerCase();
 
@@ -47,12 +47,22 @@ export async function getAuthState(): Promise<AuthState> {
         data: { name, email, title: 'Manager', role: 'MANAGER', clerkId: user.id },
       });
     } else {
-      return { status: 'no-access', email };
+      return {
+        status: 'no-access',
+        email,
+        reason: bootstrap
+          ? `No team member has this email, and BOOTSTRAP_MANAGER_EMAIL is set to a different address (${bootstrap}).`
+          : 'No team member has this email, and BOOTSTRAP_MANAGER_EMAIL is not set (is it in .env, and was the dev server restarted?).',
+      };
     }
   }
 
   if (employee.clerkId && employee.clerkId !== user.id) {
-    return { status: 'no-access', email };
+    return {
+      status: 'no-access',
+      email,
+      reason: 'This email already belongs to a team member linked to a different sign-in account.',
+    };
   }
   if (!employee.clerkId) {
     employee = await prisma.employee.update({ where: { id: employee.id }, data: { clerkId: user.id } });

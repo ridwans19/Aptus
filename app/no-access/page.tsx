@@ -24,6 +24,11 @@ export default async function NoAccessPage() {
           Ask your manager to add this exact email on the Team page, then sign in again. If you used a different email
           to sign up, sign out and use the one your manager added.
         </p>
+        {process.env.NODE_ENV !== 'production' && (
+          <p className="mono" style={{ fontSize: '0.6875rem', color: 'var(--ink-faint)', margin: '0 0 14px' }}>
+            Dev only: {auth.reason}
+          </p>
+        )}
         <SignOutButton redirectUrl="/sign-in">
           <button className="btn btn-primary">Sign out</button>
         </SignOutButton>
