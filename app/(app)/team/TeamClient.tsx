@@ -202,6 +202,8 @@ export default function TeamClient({ employees, assignments, weekHoursUsed, skil
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  const [tab, setTab] = useState<'team' | 'skills'>('team');
+  const [animate, setAnimate] = useState(false);
   const [search, setSearch] = useState('');
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteName, setInviteName] = useState('');
@@ -293,18 +295,40 @@ export default function TeamClient({ employees, assignments, weekHoursUsed, skil
     });
   }
 
+  function switchTab(next: 'team' | 'skills') {
+    if (next === tab) return;
+    setAnimate(true);
+    setTab(next);
+  }
+
   const person = personId ? employees.find((e) => e.id === personId) : null;
 
   return (
     <div>
-      <div className="panel" style={{ marginBottom: 18 }}>
+      <div className="panel">
         <div className="panel-head" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <h3>Team</h3>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowInviteForm((v) => !v)}>
-            Invite team member
-          </button>
+          <div className="seg" role="tablist" aria-label="Team or skills">
+            <div className="seg-indicator" style={{ transform: tab === 'team' ? 'translateX(0)' : 'translateX(100%)' }} />
+            <button role="tab" aria-selected={tab === 'team'} className={tab === 'team' ? 'active' : ''} onClick={() => switchTab('team')}>
+              Team
+            </button>
+            <button role="tab" aria-selected={tab === 'skills'} className={tab === 'skills' ? 'active' : ''} onClick={() => switchTab('skills')}>
+              Skills
+            </button>
+          </div>
+          {tab === 'team' ? (
+            <button className="btn btn-primary btn-sm" onClick={() => setShowInviteForm((v) => !v)}>
+              Invite team member
+            </button>
+          ) : (
+            <span className="pill">{skills.length} skills</span>
+          )}
         </div>
 
+        <div className="pane-wrap">
+          <div key={tab} className={`pane ${animate ? (tab === 'skills' ? 'from-right' : 'from-left') : ''}`}>
+        {tab === 'team' ? (
+          <>
         {showInviteForm && (
           <div className="inline-form">
             <div className="field-group">
@@ -388,15 +412,11 @@ export default function TeamClient({ employees, assignments, weekHoursUsed, skil
 
         {employees.length === 0 && <div className="empty-note">No team members yet — invite someone to get started.</div>}
         {employees.length > 0 && visible.length === 0 && <div className="empty-note">Nobody matches your search.</div>}
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <h3>Skill catalog</h3>
-          <span className="pill">{skills.length}</span>
-        </div>
+          </>
+        ) : (
+          <>
         <div className="field-hint" style={{ padding: '12px 18px 0' }}>
-          Every skill that can be given to a person or required by a task. Open a person above to set their levels.
+          Every skill that can be given to a person or required by a task. Set each person&apos;s levels from the Team tab.
         </div>
         <div className="skill-chip-cloud">
           {skills.map((s) => (
@@ -420,6 +440,10 @@ export default function TeamClient({ employees, assignments, weekHoursUsed, skil
           </button>
         </div>
         {catalogError && <div className="field-hint" style={{ color: 'var(--rust)', padding: '0 18px 14px' }}>{catalogError}</div>}
+          </>
+        )}
+          </div>
+        </div>
       </div>
 
       {person && (
