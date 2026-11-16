@@ -10,7 +10,6 @@ const NAV = [
   { href: '/projects', label: 'Projects', icon: 'folder' },
   { href: '/schedule', label: 'Schedule', icon: 'calendar' },
   { href: '/team', label: 'Team', icon: 'users' },
-  { href: '/skills', label: 'Skills', icon: 'matrix' },
 ];
 
 const ICONS: Record<string, React.ReactNode> = {

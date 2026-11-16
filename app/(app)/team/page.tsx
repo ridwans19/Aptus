@@ -15,6 +15,8 @@ export default async function TeamPage() {
     include: { requirements: { include: { skill: true } }, project: true },
   });
 
+  const skillRows = await prisma.skill.findMany({ orderBy: { name: 'asc' } });
+
   const absences = await prisma.absence.findMany();
   const absencesByEmployee: Record<string, Record<string, { note: string | null }>> = {};
   for (const a of absences) {
@@ -53,5 +55,12 @@ export default async function TeamPage() {
     weekHoursUsed[e.id] = assignedHoursInWeek(assignments, e.id, (a) => a.empId, 0);
   }
 
-  return <TeamClient employees={employees} assignments={assignments} weekHoursUsed={weekHoursUsed} />;
+  return (
+    <TeamClient
+      employees={employees}
+      assignments={assignments}
+      weekHoursUsed={weekHoursUsed}
+      skills={skillRows.map((s) => ({ id: s.id, name: s.name }))}
+    />
+  );
 }

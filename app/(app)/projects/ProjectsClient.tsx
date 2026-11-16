@@ -189,7 +189,7 @@ function AddTaskModal({
           <div className="field-group">
             <label className="field-label">Skills required</label>
             {noSkills ? (
-              <div className="field-hint">Add skills on the Skills page first, then come back.</div>
+              <div className="field-hint">Add skills in the Skill catalog on the Team page first, then come back.</div>
             ) : (
               reqs.map((r, i) => (
                 <div className="req-row" key={i}>
@@ -357,7 +357,7 @@ function TaskDetailModal({ task, skillsList, onClose }: { task: Task; skillsList
 
           <div className="field-group">
             <label className="field-label">Skills needed</label>
-            {skillsList.length === 0 && <div className="field-hint">Add skills on the Skills page to choose from them here.</div>}
+            {skillsList.length === 0 && <div className="field-hint">Add skills in the Skill catalog on the Team page to choose from them here.</div>}
             {reqs.map((r, i) => (
               <div className="req-row" key={i}>
                 <select value={r.skill} onChange={(e) => updateReq(i, 'skill', e.target.value)}>
