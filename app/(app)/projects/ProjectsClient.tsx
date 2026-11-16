@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { setTaskProgress, deleteProject, deleteTask, createProject, addTask } from './actions';
+import { setTaskProgress, deleteProject, deleteTask, createProject, addTask, updateTask } from './actions';
 
 type Requirement = { skill: string; level: number; mandatory: boolean };
 
@@ -14,6 +14,7 @@ type Task = {
   progress: 'NOT_STARTED' | 'IN_PROGRESS' | 'DONE';
   progressPercent: number;
   deadline: string | null;
+  ownDeadline: string | null;
   employee: { id: string; name: string; init: string; color: string } | null;
   requirements: Requirement[];
 };
@@ -238,6 +239,226 @@ function AddTaskModal({
 }
 
 // ---------------------------------------------------------------------------
+// Task detail: edit the task, then Smart allocate
+// ---------------------------------------------------------------------------
+function TaskDetailModal({ task, skillsList, onClose }: { task: Task; skillsList: string[]; onClose: () => void }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  // Editable details
+  const [name, setName] = useState(task.name);
+  const [hours, setHours] = useState(task.hours);
+  const [deadline, setDeadline] = useState(task.ownDeadline ?? '');
+  const [reqs, setReqs] = useState<Requirement[]>(
+    task.requirements.length ? task.requirements : [{ skill: skillsList[0] ?? '', level: 3, mandatory: true }]
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  // Progress
+  const [progress, setProgress] = useState<Task['progress']>(task.progress);
+  const [percent, setPercent] = useState(task.progressPercent);
+
+  const normalise = (rs: Requirement[]) =>
+    JSON.stringify([...rs].sort((a, b) => a.skill.localeCompare(b.skill)).map((r) => [r.skill, r.level, r.mandatory]));
+  const dirty =
+    name.trim() !== task.name ||
+    hours !== task.hours ||
+    deadline !== (task.ownDeadline ?? '') ||
+    normalise(reqs) !== normalise(task.requirements);
+  const canSave = dirty && !saving && name.trim().length > 0 && hours >= 1 && reqs.every((r) => r.skill);
+
+  function updateReq(i: number, field: keyof Requirement, value: string | number | boolean) {
+    setReqs((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  }
+
+  async function save() {
+    setSaving(true);
+    setError('');
+    // Drop duplicate skills before sending, so what's shown matches what's stored.
+    const seen = new Set<string>();
+    const cleaned = reqs.filter((r) => r.skill && !seen.has(r.skill) && seen.add(r.skill));
+    try {
+      await updateTask({ taskId: task.id, name, hours, deadline, requirements: cleaned });
+      setReqs(cleaned);
+      setName(name.trim());
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the changes.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function changeProgress(next: Task['progress']) {
+    const nextPercent = next === 'DONE' ? 100 : next === 'NOT_STARTED' ? 0 : percent;
+    setProgress(next);
+    setPercent(nextPercent);
+    startTransition(async () => {
+      await setTaskProgress(task.id, next, nextPercent);
+      router.refresh();
+    });
+  }
+
+  function commitPercent() {
+    startTransition(async () => {
+      await setTaskProgress(task.id, 'IN_PROGRESS', percent);
+      router.refresh();
+    });
+  }
+
+  function remove() {
+    if (!window.confirm(`Delete the task "${task.name}"? This can't be undone.`)) return;
+    startTransition(async () => {
+      await deleteTask(task.id);
+      onClose();
+      router.refresh();
+    });
+  }
+
+  const barColor = statusColor(progress).fg;
+
+  return (
+    <div className="modal-backdrop blurred" onClick={onClose}>
+      <div className="modal-card fit" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 540 }}>
+        <div className="modal-head">
+          <button className="modal-back" onClick={onClose}>
+            ← Back
+          </button>
+          <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: '1.0625rem' }}>{task.name}</div>
+          <div style={{ fontSize: '0.7812rem', color: 'var(--ink-soft)' }}>
+            {task.employee ? `Assigned to ${task.employee.name}` : 'Not yet assigned to anyone'}
+          </div>
+        </div>
+
+        <div className="modal-body">
+          <div className="field-group">
+            <label className="field-label">Task name</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+
+          <div className="field-row2">
+            <div className="field-group">
+              <label className="field-label">Estimated hours</label>
+              <input type="number" min={1} max={1000} value={hours} onChange={(e) => setHours(parseInt(e.target.value) || 1)} />
+            </div>
+            <div className="field-group">
+              <label className="field-label">Deadline</label>
+              <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+            </div>
+          </div>
+          <div className="field-hint" style={{ margin: '-8px 0 16px' }}>
+            {deadline
+              ? 'Clear the date to use the project deadline instead.'
+              : task.deadline
+                ? `No task deadline set, so the project deadline applies (${fmtDate(task.deadline)}).`
+                : 'No deadline set.'}
+          </div>
+
+          <div className="field-group">
+            <label className="field-label">Skills needed</label>
+            {skillsList.length === 0 && <div className="field-hint">Add skills on the Skills page to choose from them here.</div>}
+            {reqs.map((r, i) => (
+              <div className="req-row" key={i}>
+                <select value={r.skill} onChange={(e) => updateReq(i, 'skill', e.target.value)}>
+                  {!skillsList.includes(r.skill) && r.skill && <option value={r.skill}>{r.skill}</option>}
+                  {skillsList.map((sk) => (
+                    <option key={sk}>{sk}</option>
+                  ))}
+                </select>
+                <select value={r.level} onChange={(e) => updateReq(i, 'level', parseInt(e.target.value))}>
+                  {[1, 2, 3, 4, 5].map((l) => (
+                    <option key={l} value={l}>Level {l}</option>
+                  ))}
+                </select>
+                <label className="check-row">
+                  <input type="checkbox" checked={r.mandatory} onChange={(e) => updateReq(i, 'mandatory', e.target.checked)} />
+                  Required
+                </label>
+                {reqs.length > 1 ? (
+                  <button className="rm-btn" onClick={() => setReqs((prev) => prev.filter((_, idx) => idx !== i))} title="Remove">x</button>
+                ) : (
+                  <span />
+                )}
+              </div>
+            ))}
+            {skillsList.length > 0 && (
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ paddingLeft: 0 }}
+                onClick={() => setReqs((prev) => [...prev, { skill: skillsList[0] ?? '', level: 3, mandatory: false }])}
+              >
+                + Add another skill
+              </button>
+            )}
+          </div>
+
+          {error && <div className="pill warn" style={{ display: 'block', marginBottom: 12, padding: '8px 12px' }}>{error}</div>}
+
+          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+            <div className="field-label">Progress</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+              {(['NOT_STARTED', 'IN_PROGRESS', 'DONE'] as const).map((opt) => (
+                <button
+                  key={opt}
+                  className={`btn btn-sm ${progress === opt ? 'btn-primary' : 'btn-ghost'}`}
+                  disabled={isPending}
+                  onClick={() => changeProgress(opt)}
+                >
+                  {progressLabel(opt)}
+                </button>
+              ))}
+            </div>
+
+            {progress === 'IN_PROGRESS' && (
+              <div>
+                <input
+                  type="range"
+                  min={0}
+                  max={99}
+                  value={percent}
+                  onChange={(e) => setPercent(parseInt(e.target.value))}
+                  onMouseUp={commitPercent}
+                  onTouchEnd={commitPercent}
+                  onKeyUp={commitPercent}
+                  style={{ width: '100%' }}
+                  disabled={isPending}
+                />
+                <div className="mono field-hint" style={{ textAlign: 'right' }}>{percent}% complete</div>
+              </div>
+            )}
+
+            <div className="cap-bar-track" style={{ width: '100%', marginTop: 6 }}>
+              <div className="cap-bar-fill" style={{ width: `${percent}%`, background: barColor }} />
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-danger-ghost btn-sm" onClick={remove} disabled={isPending || saving}>
+            Delete task
+          </button>
+          <span className="spacer" />
+          {dirty && <span className="field-hint" style={{ margin: 0 }}>Save before allocating</span>}
+          <button className="btn btn-outline" onClick={save} disabled={!canSave}>
+            {saving ? 'Saving...' : 'Save changes'}
+          </button>
+          {dirty || saving ? (
+            <button className="btn btn-primary" disabled title="Save your changes first">
+              {task.employee ? 'Reassign' : 'Smart allocate'}
+            </button>
+          ) : (
+            <Link href={`/projects/allocate/${task.id}`} className="btn btn-primary">
+              {task.employee ? 'Reassign' : 'Smart allocate'}
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function ProjectsClient({ projects, skillsList, initialProjectId }: Props) {
@@ -250,10 +471,10 @@ export default function ProjectsClient({ projects, skillsList, initialProjectId 
   const [taskSearch, setTaskSearch] = useState('');
   const [showAddProject, setShowAddProject] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
-  const [detailTask, setDetailTask] = useState<Task | null>(null);
-  const [draftPercent, setDraftPercent] = useState(0);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
   const selected = projects.find((p) => p.id === selectedId) ?? null;
+  const detailTask = selected?.tasks.find((t) => t.id === detailTaskId) ?? null;
   const visibleProjects = projects.filter((p) => includesText([p.name, p.clientName], projectSearch));
   const visibleTasks = selected
     ? selected.tasks.filter((t) =>
@@ -266,11 +487,6 @@ export default function ProjectsClient({ projects, skillsList, initialProjectId 
     setTaskSearch('');
   }
 
-  function openDetail(t: Task) {
-    setDetailTask(t);
-    setDraftPercent(t.progressPercent);
-  }
-
   function handleDeleteProject(p: Project) {
     const ok = window.confirm(
       `Delete "${p.name}"? This will also delete its ${p.tasks.length} task${p.tasks.length === 1 ? '' : 's'} and free up any assigned employees. This can't be undone.`
@@ -281,32 +497,6 @@ export default function ProjectsClient({ projects, skillsList, initialProjectId 
       if (selectedId === p.id) setSelectedId(null);
       router.refresh();
     });
-  }
-
-  function handleDeleteTask(t: Task) {
-    if (!window.confirm(`Delete the task "${t.name}"? This can't be undone.`)) return;
-    setDetailTask(null);
-    startTransition(async () => {
-      await deleteTask(t.id);
-      router.refresh();
-    });
-  }
-
-  function handleProgressChange(task: Task, progress: Task['progress']) {
-    const percent = progress === 'DONE' ? 100 : progress === 'NOT_STARTED' ? 0 : draftPercent;
-    startTransition(async () => {
-      await setTaskProgress(task.id, progress, percent);
-      router.refresh();
-    });
-    setDetailTask((cur) => (cur ? { ...cur, progress, progressPercent: percent } : cur));
-  }
-
-  function handlePercentCommit(task: Task, percent: number) {
-    startTransition(async () => {
-      await setTaskProgress(task.id, 'IN_PROGRESS', percent);
-      router.refresh();
-    });
-    setDetailTask((cur) => (cur ? { ...cur, progress: 'IN_PROGRESS', progressPercent: percent } : cur));
   }
 
   const selectedStatus = selected ? statusColor(selected.status) : null;
@@ -421,7 +611,7 @@ export default function ProjectsClient({ projects, skillsList, initialProjectId 
                       key={t.id}
                       className="modal-task-card"
                       style={{ margin: '12px 16px', cursor: 'pointer' }}
-                      onClick={() => openDetail(t)}
+                      onClick={() => setDetailTaskId(t.id)}
                     >
                       <div className="modal-task-top">
                         <div style={{ minWidth: 0, flex: 1 }}>
@@ -477,96 +667,13 @@ export default function ProjectsClient({ projects, skillsList, initialProjectId 
         />
       )}
 
-      {/* Task detail */}
       {detailTask && selected && (
-        <div className="modal-backdrop blurred" onClick={() => setDetailTask(null)}>
-          <div className="modal-card fit" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
-            <div className="modal-head">
-              <button className="modal-back" onClick={() => setDetailTask(null)}>
-                ← Back
-              </button>
-              <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: '1.0625rem' }}>
-                {detailTask.name}
-              </div>
-              <div style={{ fontSize: '0.7812rem', color: 'var(--ink-soft)' }}>
-                {detailTask.employee ? `Assigned to ${detailTask.employee.name}` : 'Not yet assigned to anyone'}
-              </div>
-            </div>
-
-            <div className="modal-body">
-              <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--ink-soft)', marginBottom: 16 }}>
-                {detailTask.hours}h estimated
-                {detailTask.deadline ? ` · due ${fmtDate(detailTask.deadline)}` : ' · no deadline set'}
-              </div>
-
-              <Link
-                href={`/projects/allocate/${detailTask.id}`}
-                className="btn btn-primary"
-                style={{ textDecoration: 'none', width: '100%', justifyContent: 'center', marginBottom: 18 }}
-              >
-                {detailTask.employee ? 'Smart allocate · reassign' : 'Smart allocate · find the best person'}
-              </Link>
-
-              <div className="field-label">Skills needed</div>
-              <div className="skill-tag-row" style={{ marginBottom: 16 }}>
-                {detailTask.requirements.length ? (
-                  detailTask.requirements.map((r) => (
-                    <span className="skill-tag" key={r.skill}>
-                      {r.skill} L{r.level}
-                      {r.mandatory ? ' · required' : ''}
-                    </span>
-                  ))
-                ) : (
-                  <span className="field-hint">No specific skills required</span>
-                )}
-              </div>
-
-              <div className="field-label">Progress</div>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                {(['NOT_STARTED', 'IN_PROGRESS', 'DONE'] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    className={`btn btn-sm ${detailTask.progress === opt ? 'btn-primary' : 'btn-ghost'}`}
-                    disabled={isPending}
-                    onClick={() => handleProgressChange(detailTask, opt)}
-                  >
-                    {progressLabel(opt)}
-                  </button>
-                ))}
-              </div>
-
-              {detailTask.progress === 'IN_PROGRESS' && (
-                <div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={99}
-                    value={draftPercent}
-                    onChange={(e) => setDraftPercent(parseInt(e.target.value))}
-                    onMouseUp={() => handlePercentCommit(detailTask, draftPercent)}
-                    onTouchEnd={() => handlePercentCommit(detailTask, draftPercent)}
-                    style={{ width: '100%' }}
-                    disabled={isPending}
-                  />
-                  <div className="mono field-hint" style={{ textAlign: 'right' }}>{draftPercent}% complete</div>
-                </div>
-              )}
-
-              <div className="cap-bar-track" style={{ width: '100%', marginTop: 6 }}>
-                <div
-                  className="cap-bar-fill"
-                  style={{ width: `${detailTask.progress === 'IN_PROGRESS' ? draftPercent : detailTask.progressPercent}%`, background: statusColor(detailTask.progress).fg }}
-                />
-              </div>
-
-              <div style={{ marginTop: 18, textAlign: 'right' }}>
-                <button className="btn btn-danger-ghost btn-sm" onClick={() => handleDeleteTask(detailTask)} disabled={isPending}>
-                  Delete task
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <TaskDetailModal
+          key={detailTask.id}
+          task={detailTask}
+          skillsList={skillsList}
+          onClose={() => setDetailTaskId(null)}
+        />
       )}
     </div>
   );

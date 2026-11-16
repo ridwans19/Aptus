@@ -84,6 +84,8 @@ model Task {
   status         TaskStatus @default(UNASSIGNED)
   progress       TaskProgress @default(NOT_STARTED)
   progressPercent Int        @default(0)
+  // Optional per-task deadline. When empty, the project's deadline applies.
+  deadline       DateTime?
   createdAt      DateTime   @default(now())
 
   requirements TaskRequirement[]

@@ -46,7 +46,7 @@ export default async function DashboardPage() {
     empId: t.employeeId as string,
     day: t.scheduledDate ? t.scheduledDate.toISOString().slice(0, 10) : '',
     duration: t.duration,
-    deadline: t.project && t.project.deadline ? t.project.deadline.toISOString().slice(0, 10) : null,
+    deadline: (t.deadline ?? t.project?.deadline)?.toISOString().slice(0, 10) ?? null,
   }));
 
   const shapedUnassigned = unassignedTasksRaw.map((t) => ({

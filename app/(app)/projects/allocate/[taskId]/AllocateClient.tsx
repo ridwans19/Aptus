@@ -31,10 +31,16 @@ export default function AllocateClient({ task, employees, weekHours }: Props) {
   const [error, setError] = useState('');
 
   const backHref = task.projectId ? `/projects?project=${task.projectId}` : '/projects';
-  const results = useMemo(
-    () => rankCandidates(employees, task.requirements, task.hours, weekHours),
-    [employees, task.requirements, task.hours, weekHours]
-  );
+
+  // Everyone is listed and can be picked. Best fits come first; people who
+  // are missing a required skill come last, with a warning.
+  const rows = useMemo(() => {
+    const { eligible, ineligible } = rankCandidates(employees, task.requirements, task.hours, weekHours);
+    return [...eligible, ...ineligible];
+  }, [employees, task.requirements, task.hours, weekHours]);
+
+  const fullMatches = rows.filter((r) => r.meetsAll).length;
+  const eligibleCount = rows.filter((r) => r.missingMandatory.length === 0).length;
 
   async function assign(empId: string) {
     setAssigning(empId);
@@ -50,12 +56,12 @@ export default function AllocateClient({ task, employees, weekHours }: Props) {
 
   return (
     <div>
-      <Link href={backHref} className="btn btn-ghost btn-sm" style={{ textDecoration: 'none', paddingLeft: 0, marginBottom: 10 }}>
+      <Link href={backHref} className="btn btn-ghost btn-sm" style={{ paddingLeft: 0, marginBottom: 10 }}>
         ← Back to {task.projectName ?? 'projects'}
       </Link>
 
       <div className="panel" style={{ marginBottom: 20 }}>
-        <div className="panel-head">
+        <div className="panel-head" style={{ flexWrap: 'wrap', gap: 8 }}>
           <h3>Smart allocate</h3>
           {task.assignedTo && <span className="pill">Currently: {task.assignedTo}</span>}
         </div>
@@ -76,71 +82,86 @@ export default function AllocateClient({ task, employees, weekHours }: Props) {
         </div>
       </div>
 
+      {fullMatches === 0 && rows.length > 0 && (
+        <div
+          style={{
+            background: 'var(--brass-soft)',
+            color: 'var(--ink)',
+            borderRadius: 10,
+            padding: '12px 14px',
+            fontSize: '0.8125rem',
+            lineHeight: 1.5,
+            marginBottom: 16,
+          }}
+        >
+          <strong>No one is a full match for this task.</strong>{' '}
+          {eligibleCount === 0
+            ? 'Nobody has every required skill.'
+            : 'Nobody meets every requested skill level.'}{' '}
+          The closest fits are listed first, and you can still assign anyone below.
+        </div>
+      )}
+
       {error && (
         <div className="pill warn" style={{ display: 'block', marginBottom: 12, padding: '8px 12px' }}>{error}</div>
       )}
 
       <div className="panel">
-        <div className="panel-head">
-          <h3>Suggested employees</h3>
-          <span className="pill req">{results.eligible.length} eligible</span>
+        <div className="panel-head" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <h3>Team ranked for this task</h3>
+          <span className="pill req">{fullMatches} full match{fullMatches === 1 ? '' : 'es'}</span>
         </div>
 
-        {results.eligible.length === 0 && (
-          <div className="empty-note">
-            Nobody on the team has every required skill. Add the skill to someone on the Skills page, or untick
-            “required” on the task.
-          </div>
-        )}
+        {rows.length === 0 && <div className="empty-note">There is nobody on the team yet. Add people on the Team page.</div>}
 
-        {results.eligible.map((row, i) => (
-          <div className="rank-item" key={row.emp.id}>
-            <div className="rank-num">{String(i + 1).padStart(2, '0')}</div>
-            <div className="avatar" style={{ background: row.emp.color }}>{row.emp.init}</div>
-            <div className="rank-body">
-              <div className="rank-name-row">
-                <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{row.emp.name}</span>
-                <span className="mono" style={{ fontSize: '0.6875rem', color: 'var(--ink-faint)' }}>{row.emp.title}</span>
-                <span style={{ marginLeft: 'auto' }}>
-                  <MiniDial score={row.overall} size={34} />
-                </span>
-              </div>
-              <div className="rank-explain">{row.explain}</div>
-              {row.emp.id === task.assignedToId ? (
-                <div className="field-hint" style={{ marginTop: 10 }}>Already assigned to this person.</div>
-              ) : (
-                <button
-                  className="btn btn-outline btn-sm"
-                  style={{ marginTop: 10 }}
-                  onClick={() => assign(row.emp.id)}
-                  disabled={assigning !== null}
-                >
-                  {assigning === row.emp.id ? 'Assigning...' : task.assignedTo ? 'Reassign to this person' : 'Assign to this task'}
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {results.ineligible.length > 0 && (
-          <>
-            <div className="panel-head" style={{ borderTop: '1px solid var(--line)' }}>
-              <h3 style={{ fontSize: '0.8125rem', color: 'var(--ink-soft)' }}>Not eligible</h3>
-              <span className="pill warn">{results.ineligible.length}</span>
-            </div>
-            {results.ineligible.map((row) => (
-              <div className="rank-item ineligible" key={row.emp.id}>
-                <div className="avatar" style={{ background: row.emp.color }}>{row.emp.init}</div>
-                <div className="rank-body">
-                  <div style={{ fontWeight: 600, fontSize: '0.8438rem' }}>{row.emp.name}</div>
-                  <div className="rank-explain">
-                    Missing required skill: {row.missingMandatory.map((m) => m.skill).join(', ')}.
-                  </div>
+        {rows.map((row, i) => {
+          const missing = row.missingMandatory.length > 0;
+          const isCurrent = row.emp.id === task.assignedToId;
+          return (
+            <div className="rank-item" key={row.emp.id}>
+              <div className="rank-num">{String(i + 1).padStart(2, '0')}</div>
+              <div className="avatar" style={{ background: row.emp.color }}>{row.emp.init}</div>
+              <div className="rank-body" style={{ minWidth: 0 }}>
+                <div className="rank-name-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{row.emp.name}</span>
+                  <span className="mono" style={{ fontSize: '0.6875rem', color: 'var(--ink-faint)' }}>{row.emp.title}</span>
+                  <span style={{ marginLeft: 'auto' }}>
+                    <MiniDial score={row.overall} size={34} />
+                  </span>
                 </div>
+
+                <div style={{ margin: '6px 0' }}>
+                  {row.meetsAll ? (
+                    <span className="pill req">Full match</span>
+                  ) : missing ? (
+                    <span className="pill warn">Missing required: {row.missingMandatory.map((m) => m.skill).join(', ')}</span>
+                  ) : (
+                    <span className="pill" style={{ background: 'var(--brass-soft)', color: 'var(--brass)' }}>Partial match</span>
+                  )}
+                </div>
+
+                <div className="rank-explain">{row.explain}</div>
+
+                {isCurrent ? (
+                  <div className="field-hint" style={{ marginTop: 10 }}>Already assigned to this person.</div>
+                ) : (
+                  <button
+                    className={`btn btn-sm ${row.meetsAll ? 'btn-primary' : 'btn-outline'}`}
+                    style={{ marginTop: 10 }}
+                    onClick={() => assign(row.emp.id)}
+                    disabled={assigning !== null}
+                  >
+                    {assigning === row.emp.id
+                      ? 'Assigning...'
+                      : row.meetsAll
+                        ? task.assignedTo ? 'Reassign to this person' : 'Assign to this task'
+                        : 'Assign anyway'}
+                  </button>
+                )}
               </div>
-            ))}
-          </>
-        )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

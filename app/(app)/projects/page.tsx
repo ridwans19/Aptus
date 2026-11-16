@@ -33,7 +33,9 @@ export default async function ProjectsPage({
       hours: t.estimatedHours,
       progress: t.progress as 'NOT_STARTED' | 'IN_PROGRESS' | 'DONE',
       progressPercent: t.progressPercent,
-      deadline: p.deadline ? p.deadline.toISOString() : null,
+      // The task's own deadline wins; otherwise it inherits the project's.
+      deadline: (t.deadline ?? p.deadline)?.toISOString() ?? null,
+      ownDeadline: t.deadline ? t.deadline.toISOString().slice(0, 10) : null,
       employee: t.employee
         ? {
             id: t.employee.id,

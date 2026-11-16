@@ -82,6 +82,53 @@ export async function createProject(input: {
   return { id: project.id };
 }
 
+function cleanName(raw: string) {
+  const name = raw.trim();
+  if (!name) throw new Error('Task name is required.');
+  if (name.length > 120) throw new Error('Task name is too long.');
+  return name;
+}
+
+function cleanHours(raw: number) {
+  const hours = Math.round(Number(raw));
+  if (!Number.isFinite(hours) || hours < 1 || hours > 1000) throw new Error('Hours must be between 1 and 1000.');
+  return hours;
+}
+
+function cleanDeadline(raw: string) {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) throw new Error('That deadline is not a valid date.');
+  return d;
+}
+
+// One requirement per skill; keep the first if the same skill is listed twice.
+function cleanRequirements(input: RequirementInput[]) {
+  const seen = new Set<string>();
+  const reqs = input
+    .map((r) => ({
+      skill: r.skill.trim(),
+      level: Math.min(5, Math.max(1, Math.round(Number(r.level) || 1))),
+      mandatory: Boolean(r.mandatory),
+    }))
+    .filter((r) => r.skill && !seen.has(r.skill) && seen.add(r.skill));
+  if (reqs.length === 0) throw new Error('Add at least one skill the task needs.');
+  return reqs;
+}
+
+async function buildRequirementCreates(reqs: RequirementInput[]) {
+  return Promise.all(
+    reqs.map(async (r) => {
+      const skill = await prisma.skill.upsert({ where: { name: r.skill }, update: {}, create: { name: r.skill } });
+      return { skillId: skill.id, level: r.level, mandatory: r.mandatory };
+    })
+  );
+}
+
+function durationFor(hours: number) {
+  return Math.min(5, Math.max(1, Math.ceil(hours / HOURS_PER_DAY)));
+}
+
 // Adds an unassigned task to a project. Who does it is decided afterwards
 // with Smart Allocate, from the task's detail view.
 export async function addTask(input: {
@@ -91,32 +138,12 @@ export async function addTask(input: {
   requirements: RequirementInput[];
 }) {
   await assertManager();
-  const name = input.name.trim();
-  if (!name) throw new Error('Task name is required.');
-  if (name.length > 120) throw new Error('Task name is too long.');
-  const hours = Math.round(Number(input.hours));
-  if (!Number.isFinite(hours) || hours < 1 || hours > 1000) throw new Error('Hours must be between 1 and 1000.');
+  const name = cleanName(input.name);
+  const hours = cleanHours(input.hours);
+  const reqs = cleanRequirements(input.requirements);
 
   const project = await prisma.project.findUnique({ where: { id: input.projectId }, select: { id: true } });
   if (!project) throw new Error('That project no longer exists.');
-
-  // One requirement per skill; keep the first if the same skill is listed twice.
-  const seen = new Set<string>();
-  const reqs = input.requirements
-    .map((r) => ({
-      skill: r.skill.trim(),
-      level: Math.min(5, Math.max(1, Math.round(Number(r.level) || 1))),
-      mandatory: Boolean(r.mandatory),
-    }))
-    .filter((r) => r.skill && !seen.has(r.skill) && seen.add(r.skill));
-  if (reqs.length === 0) throw new Error('Add at least one skill the task needs.');
-
-  const requirementCreates = await Promise.all(
-    reqs.map(async (r) => {
-      const skill = await prisma.skill.upsert({ where: { name: r.skill }, update: {}, create: { name: r.skill } });
-      return { skillId: skill.id, level: r.level, mandatory: r.mandatory };
-    })
-  );
 
   const task = await prisma.task.create({
     data: {
@@ -124,13 +151,57 @@ export async function addTask(input: {
       estimatedHours: hours,
       projectId: project.id,
       status: 'UNASSIGNED',
-      duration: Math.min(5, Math.max(1, Math.ceil(hours / HOURS_PER_DAY))),
-      requirements: { create: requirementCreates },
+      duration: durationFor(hours),
+      requirements: { create: await buildRequirementCreates(reqs) },
     },
   });
 
   refreshProjectViews();
   return { id: task.id };
+}
+
+// Edits an existing task: name, hours, deadline and the skills it needs.
+// An empty deadline means "use the project's deadline". The skill list is
+// replaced as a whole. Anyone already assigned stays assigned - re-run Smart
+// Allocate afterwards if the change affects who fits best.
+export async function updateTask(input: {
+  taskId: string;
+  name: string;
+  hours: number;
+  deadline: string;
+  requirements: RequirementInput[];
+}) {
+  await assertManager();
+  const name = cleanName(input.name);
+  const hours = cleanHours(input.hours);
+  const deadline = cleanDeadline(input.deadline);
+  const reqs = cleanRequirements(input.requirements);
+
+  const existing = await prisma.task.findUnique({
+    where: { id: input.taskId },
+    select: { id: true, estimatedHours: true },
+  });
+  if (!existing) throw new Error('That task no longer exists.');
+
+  const requirementCreates = await buildRequirementCreates(reqs);
+
+  await prisma.$transaction([
+    prisma.taskRequirement.deleteMany({ where: { taskId: existing.id } }),
+    prisma.task.update({
+      where: { id: existing.id },
+      data: {
+        name,
+        estimatedHours: hours,
+        deadline,
+        // Only re-derive the calendar span when the hours actually changed,
+        // so a span set by hand on the Schedule page isn't overwritten.
+        ...(hours !== existing.estimatedHours ? { duration: durationFor(hours) } : {}),
+        requirements: { create: requirementCreates },
+      },
+    }),
+  ]);
+
+  refreshProjectViews();
 }
 
 export async function deleteTask(taskId: string) {

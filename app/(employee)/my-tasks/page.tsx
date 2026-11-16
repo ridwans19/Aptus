@@ -17,7 +17,7 @@ export default async function MyTasksPage() {
     projectName: t.project?.name ?? null,
     clientName: t.project?.clientName ?? null,
     hours: t.estimatedHours,
-    deadline: t.project?.deadline ? t.project.deadline.toISOString() : null,
+    deadline: (t.deadline ?? t.project?.deadline)?.toISOString() ?? null,
     progress: t.progress as 'NOT_STARTED' | 'IN_PROGRESS' | 'DONE',
     progressPercent: t.progressPercent,
     requirements: t.requirements.map((r) => ({ skill: r.skill.name, level: r.level })),

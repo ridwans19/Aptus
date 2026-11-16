@@ -21,6 +21,8 @@ export type ResultRow = {
   emp: Candidate;
   overall: number;
   missingMandatory: { skill: string }[];
+  // True when the person has every listed skill at (or above) the requested level.
+  meetsAll: boolean;
   explain: string;
 };
 
@@ -71,10 +73,12 @@ export function rankCandidates(
         ? 'Has ' + remaining + 'h free this week, enough to cover the ' + safeHours + 'h estimate.'
         : 'Only ' + remaining + 'h free this week against a ' + safeHours + 'h estimate - would run over capacity.';
 
-    return { emp, overall, missingMandatory, explain };
+    const meetsAll = perSkill.every((p) => p.has !== undefined && p.has >= p.level);
+
+    return { emp, overall, missingMandatory, meetsAll, explain };
   });
 
   const eligible = rows.filter((r) => r.missingMandatory.length === 0).sort((a, b) => b.overall - a.overall);
-  const ineligible = rows.filter((r) => r.missingMandatory.length > 0);
+  const ineligible = rows.filter((r) => r.missingMandatory.length > 0).sort((a, b) => b.overall - a.overall);
   return { eligible, ineligible };
 }

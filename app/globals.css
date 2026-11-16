@@ -78,7 +78,8 @@ body {
   }
   input:focus, textarea:focus, select:focus{ border-color:var(--teal); box-shadow:0 0 0 3px var(--teal-soft); }
   textarea{ resize:vertical; min-height:70px; font-family:'Inter'; }
-  .btn{ padding:10px 18px; border-radius:9px; border:none; font-size:0.8125rem; font-weight:600; cursor:pointer; transition:opacity .15s ease; }
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:6px; line-height:1.2; text-decoration:none; padding:10px 18px; border-radius:9px; border:none; font-size:0.8125rem; font-weight:600; cursor:pointer; transition:opacity .15s ease; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
   .btn:hover{ opacity:.88; }
   .btn-primary{ background:var(--ink); color:var(--bg); }
   .btn-outline{ background:var(--surface); color:var(--ink); border:1px solid var(--line); }
@@ -336,6 +337,8 @@ body {
   .modal-back:hover{ color:var(--ink); }
   .modal-person-row{ display:flex; align-items:center; gap:14px; }
   .modal-body{ padding:20px 22px; }
+  .modal-footer{ position:sticky; bottom:0; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:14px 22px; background:var(--surface); border-top:1px solid var(--line); }
+  .modal-footer .spacer{ flex:1; }
   .modal-task-card{ padding:14px 0; }
   .modal-task-card:not(:last-child){ border-bottom:1px solid var(--line); }
   .modal-task-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }

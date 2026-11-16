@@ -45,7 +45,7 @@ export default async function TeamPage() {
       empId: t.employeeId as string,
       day: (t.scheduledDate as Date).toISOString().slice(0, 10),
       duration: t.duration,
-      deadline: t.project?.deadline ? t.project.deadline.toISOString().slice(0, 10) : null,
+      deadline: (t.deadline ?? t.project?.deadline)?.toISOString().slice(0, 10) ?? null,
     }));
 
   const weekHoursUsed: Record<string, number> = {};
