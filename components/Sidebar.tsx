@@ -8,7 +8,6 @@ import { UserButton } from '@clerk/nextjs';
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: 'grid' },
   { href: '/projects', label: 'Projects', icon: 'folder' },
-  { href: '/smart-allocate', label: 'Smart Allocate', icon: 'sparkle', hero: true },
   { href: '/schedule', label: 'Schedule', icon: 'calendar' },
   { href: '/team', label: 'Team', icon: 'users' },
   { href: '/skills', label: 'Skills', icon: 'matrix' },
@@ -125,11 +124,10 @@ export default function Sidebar({ name }: { name: string }) {
           <Link
             key={item.href}
             href={item.href}
-            className={`nav-item ${item.hero ? 'hero' : ''} ${pathname === item.href ? 'active' : ''}`}
+            className={`nav-item ${pathname === item.href || pathname.startsWith(item.href + '/') ? 'active' : ''}`}
           >
             {ICONS[item.icon]}
             <span>{item.label}</span>
-            {item.hero && <span className="nav-spark" />}
           </Link>
         ))}
       </div>

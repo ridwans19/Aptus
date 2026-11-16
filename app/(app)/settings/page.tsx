@@ -109,7 +109,7 @@ export default function SettingsPage() {
                   onChange={(e) => setDefaultCapacity(parseInt(e.target.value) || 0)}
                 />
                 <div className="field-hint" style={{ marginTop: 6 }}>
-                  Applied to new team members when they're added. Used across Dashboard, Smart Allocate, and Schedule to calculate workload.
+                  Applied to new team members when they're added. Used across Dashboard, Projects (Smart Allocate), and Schedule to calculate workload.
                 </div>
               </div>
               <button className="btn btn-primary btn-sm">Save changes</button>

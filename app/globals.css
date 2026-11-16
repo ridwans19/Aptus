@@ -327,6 +327,8 @@ body {
   /* ---------- MODAL ---------- */
   .modal-backdrop{ position:fixed; inset:0; background:rgba(10,14,18,0.5); display:flex; align-items:flex-start; justify-content:center; padding:60px 20px; z-index:100; animation:fadeIn .15s ease; }
   .modal-card{ background:var(--surface); border-radius:16px; max-width:560px; width:100%; box-shadow:0 20px 60px -20px rgba(0,0,0,0.4); max-height:80vh; overflow-y:auto; animation:slideUp .18s ease; }
+  .modal-backdrop.blurred{ backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); align-items:center; padding:20px; }
+  .modal-card.fit{ max-height:90vh; }
   @keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
   @keyframes slideUp{ from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:translateY(0);} }
   .modal-head{ padding:20px 22px; border-bottom:1px solid var(--line); }

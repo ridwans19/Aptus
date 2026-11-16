@@ -2,20 +2,29 @@ import { requireManager } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import ProjectsClient from './ProjectsClient';
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ project?: string }>;
+}) {
   await requireManager();
-  const projectsRaw = await prisma.project.findMany({
-    include: {
-      tasks: {
-        include: {
-          employee: true,
-          requirements: { include: { skill: true } },
+  const { project: initialProjectId } = await searchParams;
+
+  const [projectsRaw, skillRows] = await Promise.all([
+    prisma.project.findMany({
+      include: {
+        tasks: {
+          include: {
+            employee: true,
+            requirements: { include: { skill: true } },
+          },
+          orderBy: { createdAt: 'asc' },
         },
-        orderBy: { createdAt: 'asc' },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.skill.findMany({ orderBy: { name: 'asc' } }),
+  ]);
 
   const projects = projectsRaw.map((p) => {
     const tasks = p.tasks.map((t) => ({
@@ -33,7 +42,7 @@ export default async function ProjectsPage() {
             color: t.employee.color,
           }
         : null,
-      requirements: t.requirements.map((r) => ({ skill: r.skill.name, level: r.level })),
+      requirements: t.requirements.map((r) => ({ skill: r.skill.name, level: r.level, mandatory: r.mandatory })),
     }));
 
     // No dedicated status field on Project - derive it from its tasks so
@@ -48,11 +57,18 @@ export default async function ProjectsPage() {
       id: p.id,
       name: p.name,
       clientName: p.clientName,
+      clientInfo: p.clientInfo,
       deadline: p.deadline ? p.deadline.toISOString() : null,
       status,
       tasks,
     };
   });
 
-  return <ProjectsClient projects={projects} />;
+  return (
+    <ProjectsClient
+      projects={projects}
+      skillsList={skillRows.map((s) => s.name)}
+      initialProjectId={initialProjectId ?? null}
+    />
+  );
 }
